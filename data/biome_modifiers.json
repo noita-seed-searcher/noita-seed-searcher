@@ -1,0 +1,181 @@
+{
+  "MOIST": {
+    "id": "MOIST",
+    "probability": 0.7
+  },
+  "FOG_OF_WAR_REAPPEARS": {
+    "id": "FOG_OF_WAR_REAPPEARS",
+    "probability": 1,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "HIGH_GRAVITY": {
+    "id": "HIGH_GRAVITY",
+    "probability": 0.5
+  },
+  "LOW_GRAVITY": {
+    "id": "LOW_GRAVITY",
+    "probability": 0.5
+  },
+  "CONDUCTIVE": {
+    "id": "CONDUCTIVE",
+    "probability": 0.2,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "FREEZING": {
+    "id": "FREEZING",
+    "probability": 0
+  },
+  "HOT": {
+    "id": "HOT",
+    "probability": 0.6,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "GOLD_VEIN": {
+    "id": "GOLD_VEIN",
+    "probability": 0.01,
+    "does_not_apply_to_biome": [
+      "snowcastle"
+    ]
+  },
+  "GOLD_VEIN_SUPER": {
+    "id": "GOLD_VEIN_SUPER",
+    "probability": 0.00025,
+    "apply_only_to_biome": [
+      "coalmine",
+      "coalmine_alt",
+      "excavationsite",
+      "snowcave"
+    ]
+  },
+  "PLANT_INFESTED": {
+    "id": "PLANT_INFESTED",
+    "probability": 1,
+    "does_not_apply_to_biome": [
+      "snowcastle",
+      "snowcave",
+      "rainforest",
+      "rainforest_open",
+      "mountain_hall"
+    ]
+  },
+  "FURNISHED": {
+    "id": "FURNISHED",
+    "probability": 0.5,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "BOOBY_TRAPPED": {
+    "id": "BOOBY_TRAPPED",
+    "probability": 0.75,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "PERFORATED": {
+    "id": "PERFORATED",
+    "probability": 0.75,
+    "does_not_apply_to_biome": [
+      "vault",
+      "vault_frozen",
+      "crypt",
+      "snowcave"
+    ]
+  },
+  "SPOOKY": {
+    "id": "SPOOKY",
+    "probability": 0.5,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "GRAVITY_FIELDS": {
+    "id": "GRAVITY_FIELDS",
+    "probability": 0.3,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ]
+  },
+  "FUNGAL": {
+    "id": "FUNGAL",
+    "probability": 0.5,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "snowcastle",
+      "snowcave",
+      "fungicave"
+    ]
+  },
+  "FLOODED": {
+    "id": "FLOODED",
+    "probability": 0.75,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "rainforest",
+      "rainforest_open",
+      "snowcave",
+      "vault"
+    ]
+  },
+  "GAS_FLOODED": {
+    "id": "GAS_FLOODED",
+    "probability": 0.5,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "excavationsite",
+      "snowcave",
+      "snowcastle",
+      "vault",
+      "crypt"
+    ]
+  },
+  "SHIELDED": {
+    "id": "SHIELDED",
+    "probability": 0.1,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "excavationsite",
+      "snowcave"
+    ]
+  },
+  "PROTECTION_FIELDS": {
+    "id": "PROTECTION_FIELDS",
+    "probability": 0.2,
+    "does_not_apply_to_biome": [
+      "mountain_hall"
+    ],
+    "requires_flag": "moon_is_sun"
+  },
+  "OMINOUS": {
+    "id": "OMINOUS",
+    "probability": 0.2,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "coalmine",
+      "excavationsite"
+    ],
+    "requires_flag": "darkmoon_is_darksun"
+  },
+  "INVISIBILITY": {
+    "id": "INVISIBILITY",
+    "probability": 0.1,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "coalmine"
+    ]
+  },
+  "WORMY": {
+    "id": "WORMY",
+    "probability": 0.05,
+    "does_not_apply_to_biome": [
+      "mountain_hall",
+      "coalmine"
+    ]
+  }
+}
