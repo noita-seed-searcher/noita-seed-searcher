@@ -265,3 +265,11 @@ func TestRuleSortOrder(t *testing.T) {
 		t.Errorf("sort order wrong:\ngot:  %v\nwant: %v", order, want)
 	}
 }
+
+func TestPerkShopSeed123Reject(t *testing.T) {
+	rng := newRNG()
+	rng.SetWorldSeed(123)
+	if checkPerkShopSeed(rng) {
+		t.Fatal("seed 123 should not match perkshop criteria but did")
+	}
+}

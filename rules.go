@@ -83,7 +83,8 @@ type RuleNode struct {
 
 // Checker evaluates rules against a seed.
 type Checker struct {
-	rng *RNG
+	rng      *RNG
+	perkRows [][]string // cached for current seed; nil = not yet computed
 }
 
 func newChecker() *Checker {
@@ -92,6 +93,14 @@ func newChecker() *Checker {
 
 func (c *Checker) SetSeed(seed uint32) {
 	c.rng.SetWorldSeed(seed)
+	c.perkRows = nil
+}
+
+func (c *Checker) getPerks() [][]string {
+	if c.perkRows == nil {
+		c.perkRows = GetPerks(c.rng)
+	}
+	return c.perkRows
 }
 
 func (c *Checker) Check(rule *RuleNode) bool {
@@ -328,7 +337,7 @@ func (c *Checker) checkPerk(rule *RuleNode) bool {
 		}
 	}
 
-	rows := GetPerks(c.rng)
+	rows := c.getPerks()
 
 	for i, somePerks := range val.Some {
 		if len(somePerks) == 0 {
@@ -658,9 +667,8 @@ func (c *Checker) checkShop(rule *RuleNode) bool {
 
 // --- Lottery ---
 
-// lotteryIsRerolled mirrors Lottery.ts provide() — returns true if perk IS rerolled.
-// lotteries = number of PERKS_LOTTERY perks picked so far.
-func (c *Checker) lotteryIsRerolled(level, perkNumber, perksOnLevel, lotteries int) bool {
+// lotteryIsRerolledFn is the standalone implementation — returns true if perk IS rerolled.
+func lotteryIsRerolledFn(rng *RNG, level, perkNumber, perksOnLevel, lotteries int) bool {
 	if level >= len(templeLocations) {
 		return false
 	}
@@ -669,8 +677,12 @@ func (c *Checker) lotteryIsRerolled(level, perkNumber, perksOnLevel, lotteries i
 	rawX := temple.X + (float64(perkNumber)+0.5)*(60.0/float64(perksOnLevel))
 	perkX := float64(roundHalfToEvenI32(rawX))
 	probability := 100.0 * math.Pow(0.5, float64(lotteries))
-	c.rng.SetRandomSeed(perkX, perkY)
-	return float64(c.rng.RandomInt(1, 100)) > probability
+	rng.SetRandomSeed(perkX, perkY)
+	return float64(rng.RandomInt(1, 100)) > probability
+}
+
+func (c *Checker) lotteryIsRerolled(level, perkNumber, perksOnLevel, lotteries int) bool {
+	return lotteryIsRerolledFn(c.rng, level, perkNumber, perksOnLevel, lotteries)
 }
 
 // LotteryRuleVal is the val for the "lottery" rule type.
@@ -703,7 +715,7 @@ func (c *Checker) checkLottery(rule *RuleNode) bool {
 		minCount = 1
 	}
 
-	rows := GetPerks(c.rng)
+	rows := c.getPerks()
 	const perksOnLevel = 3
 
 	notRerolled := 0

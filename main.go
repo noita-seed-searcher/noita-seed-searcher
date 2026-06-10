@@ -13,25 +13,32 @@ import (
 
 func main() {
 	var (
-		rulesFlag  = flag.String("rules", "", "JSON rules string or path to JSON file")
-		fromFlag   = flag.Int("from", 1, "Start seed (inclusive)")
-		toFlag     = flag.Int("to", 1_073_741_823, "End seed (exclusive)")
+		rulesFlag   = flag.String("rules", "", "JSON rules string or path to JSON file")
+		fromFlag    = flag.Int("from", 1, "Start seed (inclusive)")
+		toFlag      = flag.Int("to", 1_073_741_823, "End seed (exclusive)")
 		workersFlag = flag.Int("workers", 0, "Number of goroutines (default: num CPUs)")
-		printStats = flag.Bool("stats", true, "Print progress stats")
+		printStats  = flag.Bool("stats", true, "Print progress stats")
+		perkShop    = flag.Bool("perkshop", false, "Run specialized perk+lottery+shop search (no -rules needed)")
 	)
 	flag.Parse()
-
-	if *rulesFlag == "" {
-		fmt.Fprintln(os.Stderr, "Usage: noita-seed-search -rules <json|file> [-from N] [-to N] [-workers N]")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Example rules JSON:")
-		fmt.Fprintln(os.Stderr, `  {"id":"root","type":"and","rules":[{"id":"r1","type":"alchemy","val":{"LC":["water"],"AP":[]}}]}`)
-		os.Exit(1)
-	}
 
 	workers := *workersFlag
 	if workers <= 0 {
 		workers = runtime.NumCPU()
+	}
+
+	if *perkShop {
+		RunPerkShopSearch(uint32(*fromFlag), uint32(*toFlag), workers, *printStats)
+		return
+	}
+
+	if *rulesFlag == "" {
+		fmt.Fprintln(os.Stderr, "Usage: noita-seed-search -rules <json|file> [-from N] [-to N] [-workers N]")
+		fmt.Fprintln(os.Stderr, "       noita-seed-search -perkshop [-from N] [-to N] [-workers N]")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Example rules JSON:")
+		fmt.Fprintln(os.Stderr, `  {"id":"root","type":"and","rules":[{"id":"r1","type":"alchemy","val":{"LC":["water"],"AP":[]}}]}`)
+		os.Exit(1)
 	}
 
 	rulesData := []byte(*rulesFlag)
