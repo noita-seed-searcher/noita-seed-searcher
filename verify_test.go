@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -239,5 +240,28 @@ func TestShopSeed123Row6Items(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("row 6 items:\ngot:  %v\nwant: %v", got, want)
+	}
+}
+
+func TestRuleSortOrder(t *testing.T) {
+	raw := `{"id":"root","type":"and","rules":[
+		{"id":"p","type":"perk","val":{"all":[["X"]]}},
+		{"id":"l","type":"lottery","val":{"perks":["X"]}},
+		{"id":"a","type":"alchemy","val":{"LC":[],"AP":[]}},
+		{"id":"s","type":"shop","val":[]}
+	]}`
+	var rule RuleNode
+	if err := json.Unmarshal([]byte(raw), &rule); err != nil {
+		t.Fatal(err)
+	}
+	sortRulesByCost(&rule)
+	order := make([]string, len(rule.Rules))
+	for i, r := range rule.Rules {
+		order[i] = r.Type
+	}
+	// alchemy(1) → perk(50) → lottery(55) → shop(800)
+	want := []string{"alchemy", "perk", "lottery", "shop"}
+	if !reflect.DeepEqual(order, want) {
+		t.Errorf("sort order wrong:\ngot:  %v\nwant: %v", order, want)
 	}
 }

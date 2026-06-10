@@ -4,8 +4,65 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 )
+
+// ruleCosts maps leaf rule types to relative evaluation cost.
+// These are calibrated from observed throughput:
+// alchemy ~4.8M/s, fungal ~400k/s, perk ~90k/s, wand ~30k/s, shop ~5k/s.
+var ruleCosts = map[string]int{
+	"alchemy":           1,
+	"startingFlask":     1,
+	"startingSpell":     1,
+	"startingBombSpell": 1,
+	"weather":           2,
+	"biomeModifier":     3,
+	"fungalShift":       10,
+	"perk":              50,
+	"lottery":           55, // depends on perk
+	"wand":              150,
+	"shop":              800,
+}
+
+func leafCost(ruleType string) int {
+	if c, ok := ruleCosts[ruleType]; ok {
+		return c
+	}
+	return 0 // unimplemented rules are free (always true, filtered out immediately)
+}
+
+func nodeCost(rule *RuleNode) int {
+	switch rule.Type {
+	case RuleTypeAND, RuleTypeOR, RuleTypeRules:
+		total := 0
+		for _, r := range rule.Rules {
+			total += nodeCost(r)
+		}
+		return total
+	case RuleTypeNOT:
+		if len(rule.Rules) > 0 {
+			return nodeCost(rule.Rules[0])
+		}
+		return 0
+	default:
+		return leafCost(rule.Type)
+	}
+}
+
+// sortRulesByCost recursively sorts AND/OR children cheapest-first so that
+// short-circuit evaluation skips expensive providers whenever a cheap one fails.
+func sortRulesByCost(rule *RuleNode) {
+	switch rule.Type {
+	case RuleTypeAND, RuleTypeOR, RuleTypeRules:
+		sort.SliceStable(rule.Rules, func(i, j int) bool {
+			return nodeCost(rule.Rules[i]) < nodeCost(rule.Rules[j])
+		})
+	}
+	for _, r := range rule.Rules {
+		sortRulesByCost(r)
+	}
+}
 
 // Rule types match the TypeScript IRule / ILogicRules.
 const (

@@ -50,6 +50,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to parse rules JSON: %v\n", err)
 		os.Exit(1)
 	}
+	sortRulesByCost(&rootRule)
 
 	from := uint32(*fromFlag)
 	to := uint32(*toFlag)
