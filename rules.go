@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -16,10 +17,11 @@ const (
 
 // RuleNode is a single node in the rule tree.
 type RuleNode struct {
-	ID    string          `json:"id"`
-	Type  string          `json:"type"`
-	Rules []*RuleNode     `json:"rules,omitempty"`
-	Val   json.RawMessage `json:"val,omitempty"`
+	ID     string          `json:"id"`
+	Type   string          `json:"type"`
+	Rules  []*RuleNode     `json:"rules,omitempty"`
+	Val    json.RawMessage `json:"val,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 // Checker evaluates rules against a seed.
@@ -84,13 +86,13 @@ func (c *Checker) checkLeaf(rule *RuleNode) bool {
 	case "map":
 		return true // map is too complex for now
 	case "wand":
-		return true // wand is too complex for now
+		return c.checkWand(rule)
 	case "shop":
-		return true // shop is too complex for now
+		return c.checkShop(rule)
 	case "spells":
 		return true
 	case "lottery":
-		return true
+		return c.checkLottery(rule)
 	case "biome":
 		return true
 	case "material":
@@ -394,4 +396,273 @@ func (c *Checker) checkWeather(rule *RuleNode) bool {
 		return false
 	}
 	return true
+}
+
+// --- Wand ---
+
+type WandRuleParams struct {
+	X             float64 `json:"x"`
+	Y             float64 `json:"y"`
+	Cost          float64 `json:"cost"`
+	Level         int     `json:"level"`
+	ForceUnshuffle bool   `json:"force_unshuffle"`
+	UnshufflePerk bool    `json:"unshufflePerk"`
+}
+
+type WandRuleVal struct {
+	Gun          map[string][2]float64 `json:"gun"`
+	Cards        []string              `json:"cards"`
+	CardsStrict  bool                  `json:"cardsStrict"`
+	PermanentCard json.RawMessage      `json:"permanentCard"`
+}
+
+func (c *Checker) testGun(target WandRuleVal, wand WandResult) bool {
+	gun := wand.Gun
+	for stat, rng := range target.Gun {
+		var val float64
+		switch stat {
+		case "cost":
+			val = gun.Cost
+		case "deck_capacity":
+			val = gun.DeckCapacity
+		case "actions_per_round":
+			val = gun.ActionsPerRound
+		case "reload_time":
+			val = gun.ReloadTime
+		case "shuffle_deck_when_empty":
+			val = gun.ShuffleDeckWhenEmpty
+		case "fire_rate_wait":
+			val = gun.FireRateWait
+		case "spread_degrees":
+			val = gun.SpreadDegrees
+		case "speed_multiplier":
+			val = gun.SpeedMultiplier
+		case "mana_charge_speed":
+			val = gun.ManaChargeSpeed
+		case "mana_max":
+			val = gun.ManaMax
+		case "force_unshuffle":
+			val = gun.ForceUnshuffle
+		case "prob_unshuffle":
+			val = gun.ProbUnshuffle
+		case "prob_draw_many":
+			val = gun.ProbDrawMany
+		case "is_rare":
+			val = gun.IsRare
+		default:
+			continue
+		}
+		if val < rng[0] || val > rng[1] {
+			return false
+		}
+	}
+
+	if len(target.Cards) > 0 {
+		if target.CardsStrict {
+			if !includesAll(wand.Cards.Cards, target.Cards) {
+				return false
+			}
+		} else {
+			if !includesSome(wand.Cards.Cards, target.Cards) {
+				return false
+			}
+		}
+	}
+
+	// permanentCard: null → must have no permanent card
+	//                true → must have any permanent card
+	//                ["X","Y"] → permanent card must be one of those
+	if len(target.PermanentCard) > 0 {
+		raw := string(target.PermanentCard)
+		if raw == "null" {
+			if wand.Cards.PermanentCard != "" {
+				return false
+			}
+		} else if raw == "true" {
+			if wand.Cards.PermanentCard == "" {
+				return false
+			}
+		} else {
+			var options []string
+			if err := json.Unmarshal(target.PermanentCard, &options); err == nil {
+				if wand.Cards.PermanentCard == "" {
+					return false
+				}
+				found := false
+				for _, opt := range options {
+					if opt == wand.Cards.PermanentCard {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
+}
+
+func (c *Checker) checkWand(rule *RuleNode) bool {
+	if len(rule.Val) == 0 {
+		return true
+	}
+	var params WandRuleParams
+	if len(rule.Params) > 0 {
+		if err := json.Unmarshal(rule.Params, &params); err != nil {
+			return true
+		}
+	}
+	var val WandRuleVal
+	if err := json.Unmarshal(rule.Val, &val); err != nil {
+		return true
+	}
+	wand := ProvideWand(c.rng, params.X, params.Y, params.Cost, params.Level, params.ForceUnshuffle, params.UnshufflePerk)
+	return c.testGun(val, wand)
+}
+
+// --- Shop ---
+
+type ShopRuleItem struct {
+	Spell string          `json:"spell"`
+	Wand  *WandRuleVal    `json:"wand"`
+}
+
+type ShopLevelRule struct {
+	Type   ShopType       `json:"type"`
+	Items  []ShopRuleItem `json:"items"`
+	Strict bool           `json:"strict"`
+}
+
+func (c *Checker) checkShop(rule *RuleNode) bool {
+	if len(rule.Val) == 0 {
+		return true
+	}
+	// rule.val is a sparse array indexed by temple level (0-6)
+	var shopRules []*ShopLevelRule
+	if err := json.Unmarshal(rule.Val, &shopRules); err != nil {
+		return true
+	}
+
+	for j, shopRule := range shopRules {
+		if shopRule == nil {
+			continue
+		}
+		if shopRule.Type == 0 {
+			continue
+		}
+
+		info := ProvideShopLevel(c.rng, j, false)
+		if shopRule.Type != info.Type {
+			return false
+		}
+
+		if len(shopRule.Items) == 0 {
+			return true
+		}
+
+		if info.Type == ShopTypeWand {
+			matched := false
+			for _, sw := range info.Wands {
+				if shopRule.Items[0].Wand != nil && c.testGun(*shopRule.Items[0].Wand, sw.Wand) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
+		} else {
+			needles := make([]string, 0, len(shopRule.Items))
+			for _, item := range shopRule.Items {
+				if item.Spell != "" {
+					needles = append(needles, strings.ToUpper(item.Spell))
+				}
+			}
+			haystack := make([]string, 0, len(info.Items))
+			for _, item := range info.Items {
+				haystack = append(haystack, strings.ToUpper(item.SpellID))
+			}
+			if shopRule.Strict {
+				if !includesAll(haystack, needles) {
+					return false
+				}
+			} else {
+				if !includesSome(haystack, needles) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// --- Lottery ---
+
+// lotteryIsRerolled mirrors Lottery.ts provide() — returns true if perk IS rerolled.
+// lotteries = number of PERKS_LOTTERY perks picked so far.
+func (c *Checker) lotteryIsRerolled(level, perkNumber, perksOnLevel, lotteries int) bool {
+	if level >= len(templeLocations) {
+		return false
+	}
+	temple := templeLocations[level]
+	perkY := temple.Y
+	rawX := temple.X + (float64(perkNumber)+0.5)*(60.0/float64(perksOnLevel))
+	perkX := float64(roundHalfToEvenI32(rawX))
+	probability := 100.0 * math.Pow(0.5, float64(lotteries))
+	c.rng.SetRandomSeed(perkX, perkY)
+	return float64(c.rng.RandomInt(1, 100)) > probability
+}
+
+// LotteryRuleVal is the val for the "lottery" rule type.
+// Perks: which perks to check.
+// Lotteries: how many PERKS_LOTTERY were picked (default 1).
+// Count: how many of the listed perks must NOT be rerolled (default 1 = at least one).
+type LotteryRuleVal struct {
+	Perks     []string `json:"perks"`
+	Lotteries int      `json:"lotteries"`
+	Count     int      `json:"count"`
+}
+
+func (c *Checker) checkLottery(rule *RuleNode) bool {
+	if len(rule.Val) == 0 {
+		return true
+	}
+	var val LotteryRuleVal
+	if err := json.Unmarshal(rule.Val, &val); err != nil {
+		return true
+	}
+	if len(val.Perks) == 0 {
+		return true
+	}
+	lotteries := val.Lotteries
+	if lotteries == 0 {
+		lotteries = 1
+	}
+	minCount := val.Count
+	if minCount == 0 {
+		minCount = 1
+	}
+
+	rows := GetPerks(c.rng)
+	const perksOnLevel = 3
+
+	notRerolled := 0
+	for _, needle := range val.Perks {
+		// Find which row (level 1+) this perk appears in and at what position.
+		for level := 1; level < len(rows); level++ {
+			for perkNum, perk := range rows[level] {
+				if perk == needle {
+					if !c.lotteryIsRerolled(level, perkNum, perksOnLevel, lotteries) {
+						notRerolled++
+					}
+					goto nextPerk
+				}
+			}
+		}
+	nextPerk:
+	}
+	return notRerolled >= minCount
 }

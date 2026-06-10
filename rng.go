@@ -232,6 +232,51 @@ func roundHalfToEvenI32(value float64) int32 {
 	return int32(roundHalfToEvenF32(float32(value)))
 }
 
+// getDistribution mirrors getDistribution from nolla_prng.zig.
+func getDistribution(rng *NollaPrng, mean float32, sharpness int32) float32 {
+	const pi float32 = 3.1415
+	meanOffset := 0.5 - mean
+
+	for i := int32(0); i < 100; i++ {
+		r1 := float32(rng.next())
+		r2 := float32(rng.next())
+		div := float32(math.Abs(float64(r1 - mean)))
+
+		if r2 < (1.0-div)*0.005 {
+			return r1
+		}
+
+		if div < 0.5 {
+			wave := float32(math.Sin(float64((meanOffset + r1) * pi)))
+			shaped := float32(math.Pow(float64(wave), float64(sharpness)))
+			if shaped > r2 {
+				return r1
+			}
+		}
+	}
+	return float32(rng.next())
+}
+
+// RandomDistribution mirrors RandomDistribution from rng.zig.
+func (r *RNG) RandomDistribution(min, max, mean, sharpness int32) int32 {
+	if sharpness == 0 {
+		return r.rng.random(min, max)
+	}
+	adjustedMean := float32(mean-min) / float32(max-min)
+	dist := getDistribution(&r.rng, adjustedMean, sharpness)
+	delta := int32(math.Round(float64(float32(max-min) * dist)))
+	return min + delta
+}
+
+// RandomDistributionf mirrors RandomDistributionf from rng.zig.
+func (r *RNG) RandomDistributionf(min, max, mean float32, sharpness int32) float32 {
+	if sharpness == 0 {
+		return float32(r.rng.next())*(max-min) + min
+	}
+	adjustedMean := (mean - min) / (max - min)
+	return min + (max-min)*getDistribution(&r.rng, adjustedMean, sharpness)
+}
+
 // randomCreate mirrors random_create from random.ts.
 func randomCreate(x, y int32) RandomPos {
 	return RandomPos{x: x, y: y}
