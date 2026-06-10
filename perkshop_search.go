@@ -23,14 +23,16 @@ const (
 
 // checkPerkShopSeed is the hot path — all three conditions are inlined.
 func checkPerkShopSeed(rng *RNG) bool {
-	rows := GetPerks(rng)
-	if len(rows) == 0 {
-		return false
-	}
+	it := NewPerkIterator(rng)
 
 	// Step 1: row 0 must have all three required perks.
+	// ~99%+ of seeds fail here; we don't generate rows 1-6 for them.
+	row0 := it.NextRow()
+	if row0 == nil {
+		return false
+	}
 	hasLottery, hasTinker, hasThird := false, false, false
-	for _, p := range rows[0] {
+	for _, p := range row0 {
 		switch p {
 		case perkLottery:
 			hasLottery = true
@@ -47,8 +49,12 @@ func checkPerkShopSeed(rng *RNG) bool {
 	// Step 2: at least one of {tinker, no-shuffle, unlimited} survives lottery in rows 1+.
 	const perksOnLevel = 3
 	survived := false
-	for level := 1; level < len(rows) && !survived; level++ {
-		for perkNum, p := range rows[level] {
+	for level := 1; !survived; level++ {
+		row := it.NextRow()
+		if row == nil {
+			break
+		}
+		for perkNum, p := range row {
 			if p == perkTinker || p == perkNoShuffle || p == perkUnlimited {
 				if !lotteryIsRerolledFn(rng, level, perkNum, perksOnLevel, 1) {
 					survived = true

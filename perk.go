@@ -265,19 +265,42 @@ func (ps *PerkState) handlePerkPickup(perk string) {
 	}
 }
 
+// PerkIterator generates perk rows one at a time from a pre-built deck.
+// After NewPerkIterator, calling NextRow() repeatedly yields rows without
+// re-running the expensive deck shuffle — and callers can stop early.
+type PerkIterator struct {
+	ps   *PerkState
+	deck []string
+	done int // rows yielded so far
+}
+
+func NewPerkIterator(rng *RNG) *PerkIterator {
+	ps := newPerkState(rng)
+	ps.global.SetValue("TEMPLE_PERK_COUNT", 3)
+	return &PerkIterator{ps: ps, deck: ps.getPerkDeck()}
+}
+
+// NextRow returns the next perk row, or nil when all temple rows are exhausted.
+func (it *PerkIterator) NextRow() []string {
+	if it.done >= len(templeLocations) {
+		return nil
+	}
+	perkCount := it.ps.global.GetValue("TEMPLE_PERK_COUNT", 3)
+	row := it.ps.generateRowFromDeck(it.deck, perkCount)
+	it.done++
+	return row
+}
+
 // GetPerks returns perk rows for the current world seed (up to all temple levels).
 // The deck is generated once and reused across rows.
 func GetPerks(rng *RNG) [][]string {
-	ps := newPerkState(rng)
-	ps.global.SetValue("TEMPLE_PERK_COUNT", 3)
-
-	// Generate deck once
-	deck := ps.getPerkDeck()
-
-	var result [][]string
-	for range templeLocations {
-		perkCount := ps.global.GetValue("TEMPLE_PERK_COUNT", 3)
-		row := ps.generateRowFromDeck(deck, perkCount)
+	it := NewPerkIterator(rng)
+	result := make([][]string, 0, len(templeLocations))
+	for {
+		row := it.NextRow()
+		if row == nil {
+			break
+		}
 		result = append(result, row)
 	}
 	return result
