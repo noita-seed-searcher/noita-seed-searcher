@@ -24,15 +24,15 @@ const (
 // checkPerkShopSeed is the hot path — all three conditions are inlined.
 func checkPerkShopSeed(rng *RNG) bool {
 	// Step 1: cheap lottery pre-filter on row 0 slot positions (no perk deck needed).
-	// With 1 lottery each slot has 50% survival. We need PERKS_LOTTERY to survive
-	// plus at least one other, so at least 2 of 3 slots must survive.
-	// Rejects ~50% of all seeds before the expensive deck generation.
-	const perksOnLevel = 3
-	var slotSurvived [perksOnLevel]bool
+	// With 1 lottery each slot has 50% survival chance (Random(1,100) <= 50).
+	// We need PERKS_LOTTERY + at least one other to survive → at least 2 of 3 must pass.
+	// row0PerkX/Y are precomputed in init(); rejects ~50% of all seeds.
+	var slotSurvived [3]bool
 	survivedCount := 0
-	for perkNum := 0; perkNum < perksOnLevel; perkNum++ {
-		if !lotteryIsRerolledFn(rng, 0, perkNum, perksOnLevel, 1) {
-			slotSurvived[perkNum] = true
+	for i := 0; i < 3; i++ {
+		rng.SetRandomSeed(row0PerkX[i], row0PerkY)
+		if rng.RandomInt(1, 100) <= 50 {
+			slotSurvived[i] = true
 			survivedCount++
 		}
 	}
