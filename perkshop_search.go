@@ -23,16 +23,37 @@ const (
 
 // checkPerkShopSeed is the hot path — all three conditions are inlined.
 func checkPerkShopSeed(rng *RNG) bool {
-	it := NewPerkIterator(rng)
+	// Step 1: cheap lottery pre-filter on row 0 slot positions (no perk deck needed).
+	// With 1 lottery each slot has 50% survival. We need PERKS_LOTTERY to survive
+	// plus at least one other, so at least 2 of 3 slots must survive.
+	// Rejects ~50% of all seeds before the expensive deck generation.
+	const perksOnLevel = 3
+	var slotSurvived [perksOnLevel]bool
+	survivedCount := 0
+	for perkNum := 0; perkNum < perksOnLevel; perkNum++ {
+		if !lotteryIsRerolledFn(rng, 0, perkNum, perksOnLevel, 1) {
+			slotSurvived[perkNum] = true
+			survivedCount++
+		}
+	}
+	if survivedCount < 2 {
+		return false
+	}
 
-	// Step 1: row 0 must have all three required perks.
-	// ~99%+ of seeds fail here; we don't generate rows 1-6 for them.
+	// Step 2: build perk deck and generate row 0 (expensive).
+	it := NewPerkIterator(rng)
 	row0 := it.NextRow()
 	if row0 == nil {
 		return false
 	}
+
+	// Step 3: row 0 must have all three required perks, and specifically:
+	// PERKS_LOTTERY must be in a surviving slot, plus at least one of the others.
 	hasLottery, hasTinker, hasThird := false, false, false
-	for _, p := range row0 {
+	for perkNum, p := range row0 {
+		if !slotSurvived[perkNum] {
+			continue
+		}
 		switch p {
 		case perkLottery:
 			hasLottery = true
@@ -43,27 +64,6 @@ func checkPerkShopSeed(rng *RNG) bool {
 		}
 	}
 	if !hasLottery || !hasTinker || !hasThird {
-		return false
-	}
-
-	// Step 2: at least one of {tinker, no-shuffle, unlimited} survives lottery in rows 1+.
-	const perksOnLevel = 3
-	survived := false
-	for level := 1; !survived; level++ {
-		row := it.NextRow()
-		if row == nil {
-			break
-		}
-		for perkNum, p := range row {
-			if p == perkTinker || p == perkNoShuffle || p == perkUnlimited {
-				if !lotteryIsRerolledFn(rng, level, perkNum, perksOnLevel, 1) {
-					survived = true
-					break
-				}
-			}
-		}
-	}
-	if !survived {
 		return false
 	}
 
@@ -101,7 +101,7 @@ func RunPerkShopSearch(from, to uint32, workers int, printStats bool) {
 	total := int64(to - from)
 	fmt.Fprintf(os.Stderr, "PerkShop search: seeds %d..%d with %d workers\n", from, to, workers)
 	fmt.Fprintf(os.Stderr, "  Row 0: PERKS_LOTTERY + EDIT_WANDS_EVERYWHERE + (NO_MORE_SHUFFLE or UNLIMITED_SPELLS)\n")
-	fmt.Fprintf(os.Stderr, "  Lottery: one of the latter two survives in row 1+ with 1 lottery\n")
+	fmt.Fprintf(os.Stderr, "  Lottery: PERKS_LOTTERY + at least one other must survive lottery at row 0 (50%% chance each)\n")
 	fmt.Fprintf(os.Stderr, "  Shop 0: (CHAINSAW or MANA_REDUCE) AND (TELEPORT_PROJECTILE or TELEPORT_PROJECTILE_SHORT)\n")
 
 	var (
