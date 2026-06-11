@@ -273,3 +273,31 @@ func TestPerkShopSeed123Reject(t *testing.T) {
 		t.Fatal("seed 123 should not match perkshop criteria but did")
 	}
 }
+
+
+
+func TestLotterySpec(t *testing.T) {
+	// From Lottery.spec.ts: provide(level, perkNum, perksOnLevel=3, worldOffset=0, lotteries=1)
+	// provide() returns true = perk survives (NOT rerolled), false = IS rerolled.
+	// lotteryIsRerolledFn returns true = IS rerolled (opposite sign).
+	cases := []struct {
+		seed     uint32
+		level    int
+		perkNum  int
+		wantTS   bool // TS provide() result (true = survives)
+	}{
+		{123, 0, 0, true},  // survives → isRerolled=false
+		{123, 1, 0, false}, // rerolled → isRerolled=true
+		{123, 0, 2, true},  // survives → isRerolled=false
+	}
+	for _, tc := range cases {
+		rng := newRNG()
+		rng.SetWorldSeed(tc.seed)
+		got := lotteryIsRerolledFn(rng, tc.level, tc.perkNum, 3, 1)
+		wantRerolled := !tc.wantTS
+		if got != wantRerolled {
+			t.Errorf("seed=%d level=%d perkNum=%d: isRerolled=%v, want %v (TS survives=%v)",
+				tc.seed, tc.level, tc.perkNum, got, wantRerolled, tc.wantTS)
+		}
+	}
+}

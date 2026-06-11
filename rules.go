@@ -678,7 +678,7 @@ func lotteryIsRerolledFn(rng *RNG, level, perkNumber, perksOnLevel, lotteries in
 	perkX := float64(roundHalfToEvenI32(rawX))
 	probability := 100.0 * math.Pow(0.5, float64(lotteries))
 	rng.SetRandomSeed(perkX, perkY)
-	return float64(rng.RandomInt(1, 100)) > probability
+	return float64(rng.RandomInt(1, 100)) <= probability
 }
 
 func (c *Checker) lotteryIsRerolled(level, perkNumber, perksOnLevel, lotteries int) bool {
