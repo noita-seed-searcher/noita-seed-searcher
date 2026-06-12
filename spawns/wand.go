@@ -180,7 +180,7 @@ func generateGun(worldSeed uint32, ngPlusCount int, wandType string, cost float6
 
 func applyRandomVariable(gun *Wand, variable string, p *NollaPrng) {
 	probs := getGunProbs(gun.WandType, variable, p)
-	if probs == nil {
+	if probs == nil && variable != "shuffle_deck_when_empty" {
 		return
 	}
 
@@ -389,8 +389,9 @@ func addRandomCards(worldSeed uint32, ngPlusCount int, gun *Wand, x, y float64, 
 	}
 
 	goodCards = p.random(5, 45)
-	cardCount = p.random(roundHalfToEven(0.51*deckCapacity), roundHalfToEven(deckCapacity))
-	cardCount = int(clamp(float64(cardCount), 1, deckCapacity-1))
+	cardCountRaw := p.random(roundHalfToEven(0.51*deckCapacity), roundHalfToEven(deckCapacity))
+	cardCountF := clamp(float64(cardCountRaw), 1, deckCapacity-1)
+	cardCount = int(cardCountF)
 	gun.CardCount = cardCount
 
 	if p.random(0, 100) < origLevel*10-5 {
@@ -421,7 +422,7 @@ func addRandomCards(worldSeed uint32, ngPlusCount int, gun *Wand, x, y float64, 
 			bulletCard = GetRandomActionWithType(x, y, extraLevel, PROJECTILE, worldSeed, 0)
 		}
 		if cardCount < 3 {
-			if cardCount > 1 && p.random(0, 100) < 20 {
+			if cardCountF > 1 && p.random(0, 100) < 20 {
 				card := GetRandomActionWithType(x, y, level, MODIFIER, worldSeed, 2)
 				gun.Cards = append(gun.Cards, card)
 				cardCount--
@@ -430,20 +431,24 @@ func addRandomCards(worldSeed uint32, ngPlusCount int, gun *Wand, x, y float64, 
 				gun.Cards = append(gun.Cards, bulletCard)
 			}
 		} else {
+			fcnt := cardCountF // float shadow matches JS card_count for > comparisons
 			if p.random(0, 100) < 40 {
 				card := GetRandomActionWithType(x, y, level, DRAW_MANY, worldSeed, 1)
 				gun.Cards = append(gun.Cards, card)
 				cardCount--
+				fcnt--
 			}
-			if cardCount > 3 && p.random(0, 100) < 40 {
+			if fcnt > 3 && p.random(0, 100) < 40 {
 				card := GetRandomActionWithType(x, y, level, DRAW_MANY, worldSeed, 1)
 				gun.Cards = append(gun.Cards, card)
 				cardCount--
+				fcnt--
 			}
 			if p.random(0, 100) < 80 {
 				card := GetRandomActionWithType(x, y, level, MODIFIER, worldSeed, 2)
 				gun.Cards = append(gun.Cards, card)
 				cardCount--
+				fcnt--
 			}
 			for i := 0; i < cardCount; i++ {
 				gun.Cards = append(gun.Cards, bulletCard)
@@ -452,7 +457,7 @@ func addRandomCards(worldSeed uint32, ngPlusCount int, gun *Wand, x, y float64, 
 	} else {
 		for i := 0; i < cardCount; i++ {
 			r := p.random(0, 100)
-			if r < goodCards && cardCount > 2 {
+			if r < goodCards && cardCountF > 2 {
 				var card string
 				if goodCardCount == 0 && actionsPerRound == 1 {
 					card = GetRandomActionWithType(x, y, level, DRAW_MANY, worldSeed, i+1)

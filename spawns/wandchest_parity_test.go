@@ -119,5 +119,9 @@ func TestWandChestContentParity(t *testing.T) {
 		}
 	}
 	t.Logf("VERIFIED: premade wands (full, incl. deck). Potions/items verified in TestLootContentParity.")
-	t.Logf("KNOWN GAP: randomized generateGun diverges from this telescope ref — wand_level_01 shell %d/%d, deck %d/%d, chests %d/%d (cascade). Spell data + GetRandomActionWithType + premade tables are byte-identical, so the gap is localized to generateGun.", shellDiverge, total, deckDiverge, total, chestDiverge, total)
+	if shellDiverge+deckDiverge+chestDiverge > 0 {
+		t.Errorf("wand_level_01 diverges from telescope ref — shell %d/%d, deck %d/%d, chests %d/%d", shellDiverge, total, deckDiverge, total, chestDiverge, total)
+	} else {
+		t.Logf("VERIFIED: randomized wand_level_01 — shell %d/%d, deck %d/%d, chests %d/%d", shellDiverge, total, deckDiverge, total, chestDiverge, total)
+	}
 }
