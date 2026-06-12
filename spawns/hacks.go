@@ -256,6 +256,12 @@ func blockOutRooms(pixels []byte, width, height int) []room {
 			startY := y + 1
 			endX := x + 1
 			endY := y + 1
+
+			// Bounds check: if startY is out of bounds, skip this room
+			if startY >= height {
+				continue
+			}
+
 			foundEnd := false
 			for !foundEnd && endX < width {
 				tempIdx := (startY*width + endX) * 3
