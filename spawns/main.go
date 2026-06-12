@@ -14,7 +14,7 @@ func main() {
 	pwMaxV := flag.Int("pw-max-vertical", 0, "Parallel world range (±N vertical)")
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
-	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch")
+	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
 	biome := flag.String("biome", "coalmine", "Biome for item/potion mode")
 	flag.Parse()
@@ -74,10 +74,10 @@ func main() {
 		item := createPowderPouch(ws, *ng, *x, *y)
 		printItem(item)
 
-	case "list-coalmine":
+	case "list-spawns", "list-coalmine":
 		spawns, err := listNaturalSpawns(ws, *ng, *pwMax, *pwMaxV)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "list-coalmine: %v\n", err)
+			fmt.Fprintf(os.Stderr, "list-spawns: %v\n", err)
 			os.Exit(1)
 		}
 		printSpawnList(*seed, spawns)
