@@ -51,7 +51,7 @@ func TestListNaturalSpawnsSmoke(t *testing.T) {
 		"item": true, "potion_altar": true, "wand_altar": true, "pixel_scene": true,
 	}
 	for _, seed := range []uint32{123456789, 42, 786433} {
-		spawns, err := listNaturalSpawns(seed, 0)
+		spawns, err := listNaturalSpawns(seed, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("seed=%d: %v", seed, err)
 		}

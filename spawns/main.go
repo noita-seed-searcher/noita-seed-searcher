@@ -10,6 +10,8 @@ import (
 func main() {
 	seed := flag.Uint("seed", 0, "World seed")
 	ng := flag.Int("ng", 0, "New Game Plus count")
+	pwMax := flag.Int("pw-max", 0, "Parallel world range (±N horizontal)")
+	pwMaxV := flag.Int("pw-max-vertical", 0, "Parallel world range (±N vertical)")
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
 	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch")
@@ -73,7 +75,7 @@ func main() {
 		printItem(item)
 
 	case "list-coalmine":
-		spawns, err := listNaturalSpawns(ws, *ng)
+		spawns, err := listNaturalSpawns(ws, *ng, *pwMax, *pwMaxV)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "list-coalmine: %v\n", err)
 			os.Exit(1)
@@ -128,23 +130,33 @@ func printItem(item *Item) {
 	}
 }
 
+func pwSuffix(s *Spawn) string {
+	if s.PW == 0 && s.PWV == 0 {
+		return ""
+	}
+	if s.PWV == 0 {
+		return fmt.Sprintf(" pw=%d", s.PW)
+	}
+	return fmt.Sprintf(" pw=%d pwv=%d", s.PW, s.PWV)
+}
+
 func printSpawnList(seed uint, spawns []*Spawn) {
-	fmt.Printf("Natural spawns on the first level (Mines) for seed %d: %d item(s)\n", seed, len(spawns))
+	fmt.Printf("Natural spawns for seed %d: %d item(s)\n", seed, len(spawns))
 	for _, s := range spawns {
 		switch {
 		case s.Chest != nil:
-			fmt.Printf("  [%s] @ (%.0f, %.0f) — %d item(s)\n", s.Kind, s.X, s.Y, len(s.Chest.Items))
+			fmt.Printf("  [%s] %s%s @ (%.0f, %.0f) — %d item(s)\n", s.Kind, s.Biome, pwSuffix(s), s.X, s.Y, len(s.Chest.Items))
 			for _, it := range s.Chest.Items {
 				fmt.Printf("      - ")
 				printItem(it)
 			}
 		case s.Item != nil:
-			fmt.Printf("  [%s] ", s.Kind)
+			fmt.Printf("  [%s] %s%s ", s.Kind, s.Biome, pwSuffix(s))
 			printItem(s.Item)
 		case s.Kind == "pixel_scene":
-			fmt.Printf("  [%s:%s] @ (%.0f, %.0f) — %s\n", s.Kind, s.FuncName, s.X, s.Y, s.Note)
+			fmt.Printf("  [%s:%s] %s%s @ (%.0f, %.0f) — %s\n", s.Kind, s.FuncName, s.Biome, pwSuffix(s), s.X, s.Y, s.Note)
 		default:
-			fmt.Printf("  [%s] @ (%.0f, %.0f)\n", s.Kind, s.X, s.Y)
+			fmt.Printf("  [%s] %s%s @ (%.0f, %.0f)\n", s.Kind, s.Biome, pwSuffix(s), s.X, s.Y)
 		}
 	}
 }

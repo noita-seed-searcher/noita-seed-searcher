@@ -9,6 +9,8 @@ package main
 type Spawn struct {
 	FuncName string
 	Biome    string
+	PW       int
+	PWV      int
 	Kind     string // heart, mimic, chest_leggy, jar, chest, great_chest, wand, potion, item, pixel_scene, shop, puzzle
 	X, Y     float64
 	Chest    *ChestResult

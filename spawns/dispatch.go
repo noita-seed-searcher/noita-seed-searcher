@@ -105,14 +105,27 @@ func spawnSwitchItem(funcName string, ws uint32, ng int, x, y float64, biome, ga
 
 // listNaturalSpawns ties the whole chain together: biome map -> per-biome
 // region detect -> tiling+hacks -> spawn-point scan -> dispatch, returning
-// every item-producing natural spawn across all biomes for a seed.
-func listNaturalSpawns(seed uint32, ng int) ([]*Spawn, error) {
+// every item-producing natural spawn across all biomes and parallel worlds for a seed.
+func listNaturalSpawns(seed uint32, ng, pwMax, pwMaxV int) ([]*Spawn, error) {
 	bm, err := generateBiomeData(seed, ng, "normal")
 	if err != nil {
 		return nil, err
 	}
+	isNGP := ng > 0
+	worldSize := 70 * 512
+	if isNGP {
+		worldSize = 64*512 - 8
+	}
+	const pwVSize = 24570
+
+	type spawnPoint struct {
+		funcName string
+		x0, y0   float64
+		biome    string
+	}
+
 	tilesetCache := map[string]*stbhwTileset{}
-	var spawns []*Spawn
+	var points []spawnPoint
 	for _, entry := range biomeConfig {
 		if entry.wangFile == "" {
 			continue
@@ -132,9 +145,22 @@ func listNaturalSpawns(seed uint32, ng int) ([]*Spawn, error) {
 				continue
 			}
 			for _, d := range prescanSpawnFunctions(layer, ng > 0, "normal") {
-				s := spawnSwitchItem(d.funcName, seed, ng, float64(d.x), float64(d.y), entry.biomeName, "normal")
+				points = append(points, spawnPoint{d.funcName, float64(d.x), float64(d.y), entry.biomeName})
+			}
+		}
+	}
+
+	var spawns []*Spawn
+	for pwV := -pwMaxV; pwV <= pwMaxV; pwV++ {
+		for pw := -pwMax; pw <= pwMax; pw++ {
+			dx := float64(pw * worldSize)
+			dy := float64(pwV * pwVSize)
+			for _, p := range points {
+				s := spawnSwitchItem(p.funcName, seed, ng, p.x0+dx, p.y0+dy, p.biome, "normal")
 				if s != nil {
-					s.Biome = entry.biomeName
+					s.Biome = p.biome
+					s.PW = pw
+					s.PWV = pwV
 					spawns = append(spawns, s)
 				}
 			}
