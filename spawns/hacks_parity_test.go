@@ -75,7 +75,7 @@ func TestLayerGenParity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateBiomeData: %v", err)
 	}
-	regions, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, coalmineColor)
+	regions, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, biomeConfig[0].color)
 
 	for _, c := range v.Cases {
 		layer := generateTileLayer(bboxes[c.RegionIdx], regions[c.RegionIdx], ts, c.Seed, c.NG, "coalmine", "normal", nil)

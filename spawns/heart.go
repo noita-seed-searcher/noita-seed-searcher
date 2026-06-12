@@ -8,6 +8,7 @@ package main
 // for loot kinds; marker kinds (heart/mimic/jar/...) carry only Kind + coords.
 type Spawn struct {
 	FuncName string
+	Biome    string
 	Kind     string // heart, mimic, chest_leggy, jar, chest, great_chest, wand, potion, item, pixel_scene, shop, puzzle
 	X, Y     float64
 	Chest    *ChestResult

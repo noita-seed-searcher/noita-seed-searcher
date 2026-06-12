@@ -120,11 +120,11 @@ func TestTileGenParity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateBiomeData: %v", err)
 	}
-	_, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, coalmineColor)
+	_, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, biomeConfig[0].color)
 	if len(bboxes) != len(v.Regions) {
 		t.Fatalf("region count = %d, want %d", len(bboxes), len(v.Regions))
 	}
-	regions, _ := findBiomeRegions(bm.Pixels, bm.W, bm.H, coalmineColor)
+	regions, _ := findBiomeRegions(bm.Pixels, bm.W, bm.H, biomeConfig[0].color)
 	for i := range bboxes {
 		if bboxes[i] != v.Regions[i].Bbox {
 			t.Errorf("region[%d] bbox = %v, want %v", i, bboxes[i], v.Regions[i].Bbox)

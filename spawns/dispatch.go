@@ -103,30 +103,40 @@ func spawnSwitchItem(funcName string, ws uint32, ng int, x, y float64, biome, ga
 	}
 }
 
-// listNaturalSpawns ties the whole chain together: biome map -> region detect ->
-// tiling+hacks -> spawn-point scan -> dispatch, returning every item-producing
-// natural spawn on the coalmine (first) level for a seed. ng>0 (procedural map)
-// is not yet handled here (the coalmine color is palette-shuffled in NG+).
+// listNaturalSpawns ties the whole chain together: biome map -> per-biome
+// region detect -> tiling+hacks -> spawn-point scan -> dispatch, returning
+// every item-producing natural spawn across all biomes for a seed.
 func listNaturalSpawns(seed uint32, ng int) ([]*Spawn, error) {
 	bm, err := generateBiomeData(seed, ng, "normal")
 	if err != nil {
 		return nil, err
 	}
-	ts, err := buildBiomeTileset("data/wang_tiles/coalmine.png")
-	if err != nil {
-		return nil, err
-	}
-	regions, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, coalmineColor)
-
+	tilesetCache := map[string]*stbhwTileset{}
 	var spawns []*Spawn
-	for i := range bboxes {
-		layer := generateTileLayer(bboxes[i], regions[i], ts, seed, ng, "coalmine", "normal", nil)
-		if layer == nil {
+	for _, entry := range biomeConfig {
+		if entry.wangFile == "" {
 			continue
 		}
-		for _, d := range prescanSpawnFunctions(layer, ng > 0, "normal") {
-			if s := spawnSwitchItem(d.funcName, seed, ng, float64(d.x), float64(d.y), "coalmine", "normal"); s != nil {
-				spawns = append(spawns, s)
+		ts, ok := tilesetCache[entry.wangFile]
+		if !ok {
+			ts, err = buildBiomeTileset(entry.wangFile)
+			if err != nil {
+				return nil, err
+			}
+			tilesetCache[entry.wangFile] = ts
+		}
+		regions, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, entry.color)
+		for i := range bboxes {
+			layer := generateTileLayer(bboxes[i], regions[i], ts, seed, ng, entry.biomeName, "normal", entry.randomColors)
+			if layer == nil {
+				continue
+			}
+			for _, d := range prescanSpawnFunctions(layer, ng > 0, "normal") {
+				s := spawnSwitchItem(d.funcName, seed, ng, float64(d.x), float64(d.y), entry.biomeName, "normal")
+				if s != nil {
+					s.Biome = entry.biomeName
+					spawns = append(spawns, s)
+				}
 			}
 		}
 	}

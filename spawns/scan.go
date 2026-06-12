@@ -479,9 +479,6 @@ var watchtowerSpawns = []spawnFn{
 	{0xffaa00, "spawn_big_enemies2", false, true},
 }
 
-// coalmineColor is the coalmine region color in the static NG0 biome map.
-const coalmineColor uint32 = 0xffd57917
-
 // concatSpawns is a helper to concatenate spawn function tables.
 func concatSpawns(slices ...[]spawnFn) []spawnFn {
 	var out []spawnFn

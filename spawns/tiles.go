@@ -8,20 +8,8 @@ import (
 	_ "image/png"
 )
 
-//go:embed data/wang_tiles/coalmine.png data/wang_tiles/extra_layers/coalmine.png
+//go:embed data/wang_tiles
 var wangFS embed.FS
-
-// wangFileFor maps a biome name to its embedded Wang-tile asset. Extended as
-// more biomes are ported; coalmine (and its tower variant) is enough for the
-// first level.
-func wangFileFor(biome string) (string, bool) {
-	switch biome {
-	case "coalmine", "solid_wall_tower_1":
-		return "data/wang_tiles/coalmine.png", true
-	default:
-		return "", false
-	}
-}
 
 // loadWangRGB decodes an embedded Wang PNG to packed RGB bytes (w*h*3),
 // matching getCachedTileset's RGBA->RGB conversion in tile_generator.js.
