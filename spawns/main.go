@@ -40,6 +40,22 @@ func main() {
 		}
 		printWand(wand)
 
+	case "wand-altar":
+		item := SpawnWand(ws, *ng, *x, *y, *biome, false)
+		if item == nil {
+			fmt.Printf("No wand at (%.0f, %.0f) in biome %s for seed %d\n", *x, *y, *biome, *seed)
+		} else {
+			printItem(item)
+		}
+
+	case "potion-altar":
+		item := SpawnPotionAltar(ws, *ng, *x, *y, *biome, "normal", false)
+		if item == nil {
+			fmt.Printf("No potion spawns at (%.0f, %.0f) in biome %s for seed %d\n", *x, *y, *biome, *seed)
+		} else {
+			printItem(item)
+		}
+
 	case "item":
 		item := SpawnItem(ws, *ng, *x, *y, *biome, false)
 		if item == nil {

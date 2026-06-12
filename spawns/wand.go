@@ -483,3 +483,168 @@ func GenerateWand(worldSeed uint32, ngPlusCount int, wandTypeName string, x, y f
 	}
 	return generateGun(worldSeed, ngPlusCount, td.wandType, td.cost, td.level, td.forceUnshuffle, x, y, false)
 }
+
+// premadeWand is the static template for a premade wand.
+type premadeWand struct {
+	name               string
+	actionsPerRound    int
+	deckCapacity       int
+	reloadTime         int
+	shuffleDeckWhenEmpty int
+	fireRateWait       int
+	spreadDegrees      int
+	manaMax            float64
+	manaChargeSpeed    float64
+	speedMultiplier    float64
+	sprite             string
+	gripX, gripY       int
+	tipX, tipY         int
+}
+
+var premadeWands = []premadeWand{
+	{"Good Rapid bolt",     1, 7,  27, 1,  2,  8,  220, 45, 1.03398,  "wand_0484", 2,2, 10,2},
+	{"Good Rapid bolt",     1, 5,  25, 1,  2,  2,  250, 53, 0.982264, "wand_0654", 1,2, 10,2},
+	{"Neutral Rapid bolt",  1, 6,  90, 1,  2, -3,  180, 54, 0.994967, "wand_0958", 2,3, 10,3},
+	{"Antique Rapid bolt",  1, 3,  16, 0, 23, -1,  190, 51, 0.934037, "wand_0516", 1,5,  8,5},
+	{"Slim Rapid bolt",     1, 5,   4, 1,  6,  6,  210, 52, 0.824541, "wand_0484", 2,2, 10,2},
+	{"Superior Rapid bolt", 1, 6,  23, 0, 13,  3,  250, 49, 0.985946, "wand_0058", 2,3, 10,3},
+	{"Shiny Rapid bolt",    1, 3,  40, 0, 26,  1,  170, 55, 0.955205, "wand_0120", 1,8,  8,8},
+	{"Solid Rapid bolt",    1, 7,  26, 1, 10,  2,  160, 52, 0.987743, "wand_0898", 2,2, 10,2},
+	{"Turbo Rapid bolt",    1, 6,  49, 1,  3,  3,  160, 46, 0.853983, "wand_0724", 1,1, 10,1},
+	{"Large Rapid bolt",    1, 3,  26, 0,  3, -1,  210, 46, 1.05598,  "wand_0326", 1,3,  8,3},
+	{"Vanilla Rapid bolt",  1, 2,  26, 0, 20, -2,  250, 50, 1.02408,  "wand_0374", 1,3,  8,3},
+	{"Bad Rapid bolt",      1, 6,  50, 0, 14, -2,  250, 49, 0.995504, "wand_0324", 1,4, 10,4},
+	{"Large Rapid bolt",    1, 5,  45, 0,  4,  1,  220, 51, 0.969829, "wand_0309", 1,3,  9,3},
+	{"Slick Rapid bolt",    1, 2,  12, 0,  6,  1,  210, 50, 0.988051, "wand_0230", 1,3,  8,3},
+	{"Bulky Rapid bolt",    1, 11, 53, 1, 24,  1,  170, 49, 0.904531, "wand_0063", 1,5, 14,5},
+	{"Giga Rapid bolt",     1, 9,  18, 1, 26, -3,  750, 10, 1.07678,  "wand_0830", 2,5, 12,5},
+	{"Type a Rapid bolt",   1, 6,  14, 1,  2,  5,  190, 52, 0.987879, "wand_1000", 2,2, 10,2},
+}
+
+// generateLevel1Wand mirrors generateLevel1Wand() from wand_generation.js.
+// type is "premade_N" (1-indexed).
+func generateLevel1Wand(ws uint32, ng int, x, y float64, wandTypeName string) *Wand {
+	// Parse index from "premade_N"
+	idx := 0
+	for i := len("premade_"); i < len(wandTypeName); i++ {
+		idx = idx*10 + int(wandTypeName[i]-'0')
+	}
+	idx = (idx - 1) % len(premadeWands)
+	ref := premadeWands[idx]
+
+	gun := &Wand{
+		Name:               ref.name,
+		ActionsPerRound:    float64(ref.actionsPerRound),
+		DeckCapacity:       float64(ref.deckCapacity),
+		ReloadTime:         float64(ref.reloadTime),
+		ShuffleDeckWhenEmpty: ref.shuffleDeckWhenEmpty,
+		FireRateWait:       float64(ref.fireRateWait),
+		SpreadDegrees:      float64(ref.spreadDegrees),
+		ManaMax:            ref.manaMax,
+		ManaChargeSpeed:    ref.manaChargeSpeed,
+		SpeedMultiplier:    ref.speedMultiplier,
+		Sprite:             ref.sprite,
+		GripX:              ref.gripX, GripY: ref.gripY,
+		TipX:               ref.tipX, TipY: ref.tipY,
+		Cards:              []string{},
+		AlwaysCasts:        []string{},
+		WandType:           wandTypeName,
+		X: x, Y: y,
+	}
+
+	p := newPrng(0)
+	p.setRandomSeed(ws+uint32(ng), x, y)
+
+	total := ref.reloadTime + ref.fireRateWait + ref.spreadDegrees
+	total += p.random(-10, 20)
+
+	level1Cards := []string{
+		"LIGHT_BULLET", "RUBBER_BALL", "ARROW", "DISC_BULLET",
+		"BOUNCY_ORB", "BULLET", "AIR_BULLET", "SLIMEBALL",
+	}
+
+	cardCount := p.random(1, 5)
+
+	if p.random(1, 100) <= 85 {
+		level1Cards = append(level1Cards, "BUBBLESHOT")
+		if p.random(1, 100) <= 70 {
+			level1Cards = append(level1Cards, "SPITTER")
+			if p.random(1, 100) <= 40 {
+				level1Cards = append(level1Cards, "LIGHT_BULLET_TRIGGER")
+				cardCount = 1
+				if p.random(1, 100) <= 20 {
+					level1Cards = append(level1Cards, "DISC_BULLET_BIG")
+					if p.random(1, 100) <= 10 {
+						level1Cards = append(level1Cards, "TENTACLE_PORTAL")
+						if p.random(1, 100) <= 10 {
+							level1Cards = append(level1Cards, "BLACK_HOLE_BIG")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if total > 50 {
+		level1Cards = []string{"GRENADE", "BOMB", "ROCKET"}
+		if p.random(1, 100) <= 75 {
+			level1Cards = append(level1Cards, "DYNAMITE")
+			if p.random(1, 100) <= 50 {
+				level1Cards = append(level1Cards, "FIREBALL")
+				if p.random(1, 100) <= 40 {
+					level1Cards = append(level1Cards, "ACIDSHOT")
+					if p.random(1, 100) <= 30 {
+						level1Cards = append(level1Cards, "GLITTER_BOMB")
+						if p.random(1, 100) <= 30 {
+							level1Cards = append(level1Cards, "MINE")
+						}
+					}
+				}
+			}
+		}
+		cardCount = 1
+	}
+
+	doUtil := p.random(0, 100)
+	if doUtil < 30 {
+		level1Cards = []string{
+			"CLOUD_WATER", "X_RAY", "FREEZE_FIELD", "BLACK_HOLE", "TORCH", "SHIELD_FIELD",
+		}
+		if p.random(1, 100) <= 75 {
+			level1Cards = append(level1Cards, "ELECTROCUTION_FIELD")
+			if p.random(1, 100) <= 50 {
+				level1Cards = append(level1Cards, "DIGGER")
+				if p.random(1, 100) <= 50 {
+					level1Cards = append(level1Cards, "TORCH_ELECTRIC")
+					if p.random(1, 100) <= 50 {
+						level1Cards = append(level1Cards, "POWERDIGGER")
+						if p.random(1, 100) <= 50 {
+							level1Cards = append(level1Cards, "SOILBALL")
+							if p.random(1, 100) <= 50 {
+								level1Cards = append(level1Cards, "LUMINOUS_DRILL")
+								if p.random(1, 100) <= 50 {
+									level1Cards = append(level1Cards, "CHAINSAW")
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		cardCount = 1
+	}
+
+	if cardCount > ref.deckCapacity {
+		cardCount = ref.deckCapacity
+	}
+
+	cardIdx := p.random(0, len(level1Cards)-1)
+	card := level1Cards[cardIdx]
+
+	for i := 0; i < cardCount; i++ {
+		gun.Cards = append(gun.Cards, card)
+	}
+
+	gun.CardCount = cardCount
+	return gun
+}
