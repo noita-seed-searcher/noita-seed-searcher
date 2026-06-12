@@ -48,7 +48,8 @@ func spawnSwitchItem(funcName string, ws uint32, ng int, x, y float64, biome, ga
 		prng := &NollaPrng{}
 		prng.setRandomSeed(ws+uint32(ng), x, y)
 		rnd := prng.random(1, len(options))
-		w := GenerateWand(ws, ng, options[rnd-1], x, y)
+		// generateWandByType (not GenerateWand) so premade_* types are handled.
+		w := generateWandByType(ws, ng, x, y, options[rnd-1], false)
 		if w == nil {
 			return nil
 		}
