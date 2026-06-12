@@ -50,11 +50,13 @@ func nodeCost(rule *RuleNode) int {
 	}
 }
 
-// sortRulesByCost recursively sorts AND/OR children cheapest-first so that
-// short-circuit evaluation skips expensive providers whenever a cheap one fails.
+// sortRulesByCost recursively sorts AND children cheapest-first so that
+// short-circuit evaluation skips expensive checks whenever a cheap one fails.
+// OR nodes are not reordered: the caller may have arranged them by match
+// probability, and cost-sorting would undermine that intent.
 func sortRulesByCost(rule *RuleNode) {
 	switch rule.Type {
-	case RuleTypeAND, RuleTypeOR, RuleTypeRules:
+	case RuleTypeAND, RuleTypeRules:
 		sort.SliceStable(rule.Rules, func(i, j int) bool {
 			return nodeCost(rule.Rules[i]) < nodeCost(rule.Rules[j])
 		})
