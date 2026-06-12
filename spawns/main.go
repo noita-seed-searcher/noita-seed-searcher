@@ -110,6 +110,27 @@ func printWand(w *Wand) {
 	}
 }
 
+func printWandDetail(w *Wand) {
+	shuffle := "shuffle"
+	if w.ShuffleDeckWhenEmpty == 0 {
+		shuffle = "no-shuffle"
+	}
+	rare := ""
+	if w.IsRare == 1 {
+		rare = " [RARE]"
+	}
+	fmt.Printf("    Wand%s: %s  type=%s  level=%d\n", rare, w.Name, w.WandType, w.Level)
+	fmt.Printf("    capacity=%g  apm=%g  reload=%g  fire_rate=%g  spread=%g  speed=%g\n",
+		w.DeckCapacity, w.ActionsPerRound, w.ReloadTime, w.FireRateWait, w.SpreadDegrees, w.SpeedMultiplier)
+	fmt.Printf("    mana=%g/%g  %s  sprite=%s\n", w.ManaMax, w.ManaChargeSpeed, shuffle, w.Sprite)
+	if len(w.AlwaysCasts) > 0 {
+		fmt.Printf("    always_cast: %s\n", strings.Join(w.AlwaysCasts, ", "))
+	}
+	if len(w.Cards) > 0 {
+		fmt.Printf("    cards: %s\n", strings.Join(w.Cards, ", "))
+	}
+}
+
 func printItem(item *Item) {
 	if item == nil {
 		fmt.Println("(none)")
@@ -151,8 +172,13 @@ func printSpawnList(seed uint, spawns []*Spawn) {
 				printItem(it)
 			}
 		case s.Item != nil:
-			fmt.Printf("  [%s] %s%s ", s.Kind, s.Biome, pwSuffix(s))
-			printItem(s.Item)
+			if s.Item.ItemType == "wand" && s.Item.Wand != nil {
+				fmt.Printf("  [%s] %s%s @ (%.0f, %.0f)\n", s.Kind, s.Biome, pwSuffix(s), s.X, s.Y)
+				printWandDetail(s.Item.Wand)
+			} else {
+				fmt.Printf("  [%s] %s%s ", s.Kind, s.Biome, pwSuffix(s))
+				printItem(s.Item)
+			}
 		case s.Kind == "pixel_scene":
 			fmt.Printf("  [%s:%s] %s%s @ (%.0f, %.0f) — %s\n", s.Kind, s.FuncName, s.Biome, pwSuffix(s), s.X, s.Y, s.Note)
 		default:
