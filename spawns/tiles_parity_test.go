@@ -138,7 +138,7 @@ func TestTileGenParity(t *testing.T) {
 
 	// 3. Raw tile buffer parity per case.
 	for _, c := range v.Cases {
-		raw := generateRawTileBuffer(c.Bbox, ts, c.Seed, c.NG, 0)
+		raw := generateRawTileCore(c.Bbox, ts, c.Seed, c.NG, 0)
 		if raw == nil {
 			t.Errorf("seed=%d region=%d: nil raw buffer", c.Seed, c.RegionIdx)
 			continue

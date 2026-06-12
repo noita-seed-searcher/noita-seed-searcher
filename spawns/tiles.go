@@ -8,7 +8,7 @@ import (
 	_ "image/png"
 )
 
-//go:embed data/wang_tiles/coalmine.png
+//go:embed data/wang_tiles/coalmine.png data/wang_tiles/extra_layers/coalmine.png
 var wangFS embed.FS
 
 // wangFileFor maps a biome name to its embedded Wang-tile asset. Extended as
@@ -161,10 +161,10 @@ type rawTile struct {
 	mapH        int
 }
 
-// generateRawTileBuffer ports the pre-hack portion of generateRawTileBuffer:
-// dimensions, the world-seed reseed dance, and stbhw_generate_image. The biome
-// hacks that follow in the JS are deferred to a later stage.
-func generateRawTileBuffer(bbox [4]int, ts *stbhwTileset, worldSeed uint32, ngPlus, extraRerolls int) *rawTile {
+// generateRawTileCore ports the pre-hack portion of generateRawTileBuffer:
+// dimensions, the world-seed reseed dance, and stbhw_generate_image. The
+// in-buffer hacks that follow in the JS are applied by generateRawTile.
+func generateRawTileCore(bbox [4]int, ts *stbhwTileset, worldSeed uint32, ngPlus, extraRerolls int) *rawTile {
 	minX, minY := bbox[0], bbox[1]
 	dims := calculateMapDimensions(bbox)
 	mapW, mapH := dims.w, dims.h
@@ -210,5 +210,162 @@ func generateRawTileBuffer(bbox [4]int, ts *stbhwTileset, worldSeed uint32, ngPl
 		minX:        minX,
 		minY:        minY,
 		mapH:        mapH,
+	}
+}
+
+const (
+	maxPathfindingAttempts    = 99
+	biomePathHeightLimitChunk = 4
+)
+
+var coalmineOverlayCache *overlay
+
+func coalmineOverlay() *overlay {
+	if coalmineOverlayCache == nil {
+		ov, err := loadOverlay("data/wang_tiles/extra_layers/coalmine.png")
+		if err != nil {
+			panic(err)
+		}
+		coalmineOverlayCache = ov
+	}
+	return coalmineOverlayCache
+}
+
+// generateRawTile ports the full generateRawTileBuffer: the stbhw core plus the
+// in-buffer hacks (blockOutRooms, applyMainBiomeHack, applyCoalmineHack) that
+// run before pathfinding. Returns the raw tile and any blocked rooms.
+func generateRawTile(bbox [4]int, ts *stbhwTileset, worldSeed uint32, ngPlus, extraRerolls int, biomeName, gameMode string) (*rawTile, []room) {
+	raw := generateRawTileCore(bbox, ts, worldSeed, ngPlus, extraRerolls)
+	if raw == nil {
+		return nil, nil
+	}
+
+	var rooms []room
+	if biomeName == "coalmine" || biomeName == "excavationsite" {
+		rooms = blockOutRooms(raw.buffer, raw.width, raw.height)
+	}
+
+	center := getWorldCenter(ngPlus > 0, gameMode)
+	if bbox[0] <= center && bbox[2] >= center {
+		applyMainBiomeHack(bbox[0], raw.buffer, raw.width, raw.height, biomeName, ngPlus > 0, gameMode)
+	}
+
+	if (biomeName == "coalmine" || biomeName == "solid_wall_tower_1") && gameMode != "nightmare" {
+		applyCoalmineHack(raw.buffer, raw.width, raw.height, coalmineOverlay())
+	}
+
+	return raw, rooms
+}
+
+// tileLayer is the final per-region output whose buffer the PoI scanner reads.
+type tileLayer struct {
+	biomeName  string
+	buffer     []byte
+	width      int
+	height     int // outH (mapH + 4)
+	mapH       int
+	path       []point
+	minX, minY int
+	attempts   int
+}
+
+// generateTileLayer ports the non-static per-region body of generateBiomeTiles:
+// the pathfinding reroll loop, room restoration, undoCoalmineHack,
+// postprocessing, the large-region extension hack, and masking. The returned
+// buffer is the final scannable layer buffer.
+func generateTileLayer(bbox [4]int, region []point, ts *stbhwTileset, worldSeed uint32, ngPlus int, biomeName, gameMode string, randomColors map[uint32][]uint32) *tileLayer {
+	currentRerolls := 0
+	attempts := 0
+	var raw *rawTile
+	var rooms []room
+	var finalPath []point
+	valid := false
+
+	for !valid && attempts < maxPathfindingAttempts {
+		raw, rooms = generateRawTile(bbox, ts, worldSeed, ngPlus, currentRerolls, biomeName, gameMode)
+		if raw == nil {
+			break
+		}
+		var path []point
+		if 1+bbox[3]-bbox[1] > biomePathHeightLimitChunk {
+			path = []point{}
+		} else {
+			path = findMinPath(bbox, raw.buffer, raw.width, raw.height, biomeName, ngPlus > 0, gameMode)
+		}
+		if path != nil {
+			valid = true
+			finalPath = path
+		} else {
+			currentRerolls++
+			attempts++
+		}
+	}
+
+	if attempts == maxPathfindingAttempts {
+		raw, rooms = generateRawTile(bbox, ts, worldSeed, ngPlus, currentRerolls, biomeName, gameMode)
+		valid = true
+		finalPath = []point{}
+	}
+
+	if !valid || raw == nil {
+		return nil
+	}
+
+	// Restore blocked rooms to air.
+	for _, rm := range rooms {
+		for y := rm.startY; y <= rm.endY; y++ {
+			for x := rm.startX; x <= rm.endX; x++ {
+				idx := (y*raw.width + x) * 3
+				if idx >= 0 && idx+2 < len(raw.buffer) {
+					raw.buffer[idx] = 0
+					raw.buffer[idx+1] = 0
+					raw.buffer[idx+2] = 0
+				}
+			}
+		}
+	}
+
+	if (biomeName == "coalmine" || biomeName == "solid_wall_tower_1") && gameMode != "nightmare" {
+		undoCoalmineHack(raw.buffer, raw.width, raw.height, coalmineOverlay())
+	}
+
+	applyPostprocessingHacks(raw.buffer, raw.width, raw.height, worldSeed, ngPlus, finalPath, randomColors)
+
+	if raw.width > 1024 || raw.height > 1028 {
+		for y := 0; y < raw.height; y++ {
+			for x := 0; x < raw.width; x++ {
+				if y < 4 {
+					continue
+				}
+				if x < 1024 && y < 1028 {
+					continue
+				}
+				srcX := x % 1024
+				srcY := 4 + (y-4)%1024
+				srcIdx := (srcY*raw.width + srcX) * 3
+				dstIdx := (y*raw.width + x) * 3
+				raw.buffer[dstIdx] = raw.buffer[srcIdx]
+				raw.buffer[dstIdx+1] = raw.buffer[srcIdx+1]
+				raw.buffer[dstIdx+2] = raw.buffer[srcIdx+2]
+			}
+		}
+	}
+
+	validChunks := make(map[[2]int]bool, len(region))
+	for _, p := range region {
+		validChunks[[2]int{p.X, p.Y}] = true
+	}
+	applyMasking(raw.buffer, raw.width, bbox, validChunks, 4)
+
+	return &tileLayer{
+		biomeName: biomeName,
+		buffer:    raw.buffer,
+		width:     raw.width,
+		height:    raw.height,
+		mapH:      raw.mapH,
+		path:      finalPath,
+		minX:      raw.minX,
+		minY:      raw.minY,
+		attempts:  attempts,
 	}
 }
