@@ -56,13 +56,22 @@ func spawnSwitchItem(funcName string, ws uint32, ng int, x, y float64, biome, ga
 		return &Spawn{FuncName: funcName, Kind: "wand", X: x, Y: y, Item: &Item{ItemType: "wand", Wand: w, X: x, Y: y}}
 
 	case "spawn_props3":
-		// In coalmine, props3 rolls for a potion.
 		prng := &NollaPrng{}
 		prng.setRandomSeed(ws+uint32(ng), x, y)
-		r := prng.next() * 0.4
-		if r > 0.1 {
-			it := createPotion(ws, ng, x+5, y, "normal", gameMode)
-			return &Spawn{FuncName: funcName, Kind: "potion", X: x, Y: y, Item: it}
+		switch biome {
+		case "coalmine", "coalmine_alt":
+			if prng.next()*0.4 > 0.1 {
+				it := createPotion(ws, ng, x+5, y, "normal", gameMode)
+				return &Spawn{FuncName: funcName, Kind: "potion", X: x, Y: y, Item: it}
+			}
+		case "snowcastle":
+			r := prng.next() * 1.325
+			if r > 1.3 {
+				it := createPotion(ws, ng, x+5, y, "normal", gameMode)
+				return &Spawn{FuncName: funcName, Kind: "potion", X: x, Y: y, Item: it}
+			} else if r > 1.2 {
+				return &Spawn{FuncName: funcName, Kind: "potion", X: x + 5, Y: y, Item: &Item{ItemType: "potion", Material: "alcohol", X: x + 5, Y: y}}
+			}
 		}
 		return nil
 
