@@ -16,6 +16,9 @@ type parityVector struct {
 	SeedAfterNext float64   `json:"seedAfterNext"`
 	Pri           int       `json:"pri"`
 	Seq           []float64 `json:"seq"`
+	USeq          []uint32  `json:"useq"`
+	SrfwsSeed     float64   `json:"srfwsSeed"`
+	SrfwsSeq      []float64 `json:"srfwsSeq"`
 }
 
 // TestPRNGParity verifies spawns/rng.go matches the reference nolla_prng.js
@@ -66,6 +69,33 @@ func TestPRNGParity(t *testing.T) {
 		for i, want := range v.Seq {
 			if got := ps.next(); got != want {
 				t.Errorf("ws=%d x=%g y=%g: seq[%d] = %v, want %v", v.WS, v.X, v.Y, i, got, want)
+			}
+		}
+
+		// Fresh seed, then a sequence of nextU() draws.
+		pu := &NollaPrng{}
+		pu.setRandomSeed(v.WS, v.X, v.Y)
+		for i, want := range v.USeq {
+			if got := pu.nextU(); got != want {
+				t.Errorf("ws=%d x=%g y=%g: useq[%d] = %d, want %d", v.WS, v.X, v.Y, i, got, want)
+			}
+		}
+
+		// setRandomFromWorldSeed then 3×nextU + 3×next (the tiler reseed dance).
+		pw := &NollaPrng{}
+		pw.setRandomFromWorldSeed(float64(v.WS))
+		if pw.seed != v.SrfwsSeed {
+			t.Errorf("ws=%d: srfwsSeed = %.0f, want %.0f", v.WS, pw.seed, v.SrfwsSeed)
+		}
+		for i, want := range v.SrfwsSeq {
+			var got float64
+			if i < 3 {
+				got = float64(pw.nextU())
+			} else {
+				got = pw.next()
+			}
+			if got != want {
+				t.Errorf("ws=%d: srfwsSeq[%d] = %v, want %v", v.WS, i, got, want)
 			}
 		}
 	}

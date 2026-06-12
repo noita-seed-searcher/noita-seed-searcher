@@ -32,6 +32,20 @@ function caseFor(ws, x, y) {
   const seq = [];
   for (let i = 0; i < 4; i++) seq.push(p4.Next());
 
+  // NextU() sequence from the seeded state (used by the Wang-tile generator).
+  const p5 = new NollaPrng(0);
+  p5.SetRandomSeed(ws >>> 0, x, y);
+  const useq = [];
+  for (let i = 0; i < 4; i++) useq.push(p5.NextU());
+
+  // SetRandomFromWorldSeed(ws) then mixed draws (the tiler's reseed dance).
+  const p6 = new NollaPrng(0);
+  p6.SetRandomFromWorldSeed(ws);
+  const srfwsSeed = p6.Seed;
+  const srfwsSeq = [];
+  for (let i = 0; i < 3; i++) srfwsSeq.push(p6.NextU());
+  for (let i = 0; i < 3; i++) srfwsSeq.push(p6.Next());
+
   return {
     ws: ws >>> 0, x, y,
     seedAfterSet,
@@ -39,6 +53,9 @@ function caseFor(ws, x, y) {
     seedAfterNext,
     pri,
     seq,
+    useq,
+    srfwsSeed,
+    srfwsSeq,
   };
 }
 

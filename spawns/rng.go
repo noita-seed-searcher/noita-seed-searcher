@@ -39,7 +39,7 @@ func rngHelper(v float64) uint32 {
 		return 2
 	}
 	bits := math.Float64bits(v)
-	finite := ((bits>>32)&0x7fffffff) < 0x7ff00000
+	finite := ((bits >> 32) & 0x7fffffff) < 0x7ff00000
 	inRange := v >= -9.223372036854776e18 && v < 9.223372036854776e18
 	if !finite || !inRange {
 		return 0
@@ -117,6 +117,22 @@ func (p *NollaPrng) setRandomSeed(ws uint32, x, y float64) {
 func (p *NollaPrng) proceduralRandom(ws uint32, x, y float64) float64 {
 	p.setRandomSeed(ws, x, y)
 	return p.next()
+}
+
+// nextU matches NollaPrng.NextU() from JS: advance, then map the seed to a
+// uint32 via the fixed scale factor. Used by the Wang-tile generator.
+func (p *NollaPrng) nextU() uint32 {
+	p.next()
+	r := p.seed * 4.656612875e-10 * 2147483645.0
+	return uint32(int64(r))
+}
+
+// setRandomFromWorldSeed matches NollaPrng.SetRandomFromWorldSeed(s) from JS.
+func (p *NollaPrng) setRandomFromWorldSeed(s float64) {
+	p.seed = s
+	if p.seed >= 2147483647.0 {
+		p.seed = s * 0.5
+	}
 }
 
 func (p *NollaPrng) getDistribution(mean, sharpness, baseline float64) float64 {
