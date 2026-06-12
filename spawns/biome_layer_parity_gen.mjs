@@ -236,7 +236,100 @@ function genTileLayer(bbox, region, ts, worldSeed, ngPlus, biomeName, gameMode, 
   const imgData = { data: new Uint8ClampedArray(rawResult.width * rawResult.mapH * 4) };
   applyMasking(rawResult.buffer, imgData, rawResult.width, bbox, validChunks, 4);
 
-  return { buffer: rawResult.buffer, width: rawResult.width, height: rawResult.height, mapH: rawResult.mapH, path: finalPath, attempts };
+  return { buffer: rawResult.buffer, width: rawResult.width, height: rawResult.height, mapH: rawResult.mapH, path: finalPath, attempts, minX: rawResult.minX, minY: rawResult.minY, biomeName };
+}
+
+// --- verbatim spawn-function tables (spawn_function_config.js) ---
+const DEFAULT_SPAWNS = [
+  { color: 0xff0000, funcName: "spawn_small_enemies" }, { color: 0x800000, funcName: "spawn_big_enemies" },
+  { color: 0x00ff00, funcName: "spawn_items" }, { color: 0xc88d1a, funcName: "spawn_props" },
+  { color: 0xc88000, funcName: "spawn_props2" }, { color: 0xc80040, funcName: "spawn_props3" },
+  { color: 0xffff00, funcName: "spawn_lamp" }, { color: 0xff0aff, funcName: "load_pixel_scene" },
+  { color: 0xFF0080, funcName: "load_pixel_scene2" }, { color: 0xFF8000, funcName: "spawn_unique_enemy" },
+  { color: 0xc84040, funcName: "spawn_unique_enemy2" }, { color: 0x804040, funcName: "spawn_unique_enemy3" },
+  { color: 0x96C850, funcName: "spawn_ghostlamp" }, { color: 0x60A064, funcName: "spawn_candles" },
+  { color: 0x50a000, funcName: "spawn_potion_altar" }, { color: 0xbca0f0, funcName: "spawn_potions" },
+  { color: 0x00FF5A, funcName: "spawn_apparition" }, { color: 0x78FFFF, funcName: "spawn_heart" },
+  { color: 0x50A0F0, funcName: "spawn_wands" }, { color: 0xbf26a6, funcName: "spawn_portal" },
+  { color: 0x04A977, funcName: "spawn_end_portal" }, { color: 0xffd171, funcName: "spawn_orb" },
+  { color: 0xffd181, funcName: "spawn_perk" }, { color: 0xffff81, funcName: "spawn_all_perks" },
+  { color: 0xc7eb28, funcName: "spawn_wand_trap" }, { color: 0xE8FF80, funcName: "spawn_wand_trap_ignite" },
+  { color: 0x2768DE, funcName: "spawn_wand_trap_electricity_source" }, { color: 0x2768DF, funcName: "spawn_wand_trap_electricity" },
+  { color: 0x6b4f9b, funcName: "spawn_moon" }, { color: 0xd7b3e8, funcName: "spawn_collapse" },
+];
+const COALMINE_SPAWNS = [
+  { color: 0x0000ff, funcName: "spawn_nest" }, { color: 0xB40000, funcName: "spawn_fungi" },
+  { color: 0x969678, funcName: "load_structures" }, { color: 0x967878, funcName: "load_large_structures" },
+  { color: 0x967896, funcName: "load_i_structures" }, { color: 0x80FF5A, funcName: "spawn_vines" },
+  { color: 0xC35700, funcName: "load_oiltank" }, { color: 0x55AF4B, funcName: "load_altar" },
+  { color: 0x23B9C3, funcName: "spawn_altar_torch" }, { color: 0x55AF8C, funcName: "spawn_skulls" },
+  { color: 0x55FF8C, funcName: "spawn_chest" }, { color: 0x4e175e, funcName: "load_oiltank_alt" },
+  { color: 0x33934c, funcName: "spawn_shopitem" }, { color: 0x50fafa, funcName: "spawn_trapwand" },
+  { color: 0xf12ab5, funcName: "spawn_bbqbox" }, { color: 0x005cfd, funcName: "spawn_swing_puzzle_box" },
+  { color: 0x00b5fc, funcName: "spawn_swing_puzzle_target" }, { color: 0x93ca00, funcName: "spawn_oiltank_puzzle" },
+  { color: 0xb97300, funcName: "spawn_receptacle_oil" },
+];
+const BIOME_SPAWN_FUNCTION_MAP = { coalmine: [...DEFAULT_SPAWNS, ...COALMINE_SPAWNS] };
+function getSpawnFunctionIndex(biomeName, color) {
+  const fns = BIOME_SPAWN_FUNCTION_MAP[biomeName];
+  if (!fns) return null;
+  for (let i = 0; i < fns.length; i++) if (fns[i].color === color) return i;
+  return null;
+}
+// --- verbatim tileToWorldCoordinates (utils.js); constants inlined ---
+const WORLD_CHUNK_CENTER_X = 35, WORLD_CHUNK_CENTER_X_NGP = 32, WORLD_CHUNK_CENTER_Y = 14;
+const CHUNK_SIZE = 512, TILE_SIZE = 10, TILE_OFFSET_X = 5, TILE_OFFSET_Y = -13;
+function tileToWorldCoordinates(chunkBaseX, chunkBaseY, tileX, tileY, pw = 0, pwVertical = 0, isNGP = false, gameMode = "normal") {
+  const world_chunk_center_x = (isNGP || gameMode === "nightmare") ? WORLD_CHUNK_CENTER_X_NGP : WORLD_CHUNK_CENTER_X;
+  const worldSize = (isNGP || gameMode === "nightmare") ? 64 * 512 - 8 : 70 * 512;
+  let smallChunkSize = Math.floor(CHUNK_SIZE / TILE_SIZE);
+  let div5offX = 5 * CHUNK_SIZE * Math.floor((chunkBaseX - world_chunk_center_x) / 5);
+  let mod5offX = (((chunkBaseX - world_chunk_center_x) % 5 + 5) % 5);
+  let worldBaseX = div5offX + mod5offX * smallChunkSize * TILE_SIZE;
+  let worldX_alt = -TILE_SIZE + worldBaseX + tileX * TILE_SIZE + TILE_OFFSET_X;
+  let div5offY = 5 * CHUNK_SIZE * Math.floor((chunkBaseY - WORLD_CHUNK_CENTER_Y) / 5);
+  let mod5offY = (((chunkBaseY - WORLD_CHUNK_CENTER_Y) % 5 + 5) % 5);
+  let worldBaseY = div5offY + mod5offY * smallChunkSize * TILE_SIZE;
+  if (mod5offY > 0) worldBaseY += TILE_SIZE;
+  let worldY_alt = -TILE_SIZE + worldBaseY + tileY * TILE_SIZE + TILE_OFFSET_Y;
+  if (isNGP || gameMode === "nightmare") { if (mod5offX >= 3) worldX_alt += TILE_SIZE; }
+  worldY_alt += TILE_SIZE;
+  if (isNGP || gameMode === "nightmare") worldX_alt -= 4;
+  worldX_alt += pw * worldSize;
+  worldY_alt += pwVertical * 24570;
+  return { x: worldX_alt, y: worldY_alt };
+}
+// --- verbatim prescanSpawnFunctions (poi_scanner.js) for one layer ---
+function prescanLayer(layer, isNGP, gameMode) {
+  const detected = [];
+  const sourceBiome = layer.biomeName;
+  const width = layer.width, height = layer.mapH;
+  const fns = BIOME_SPAWN_FUNCTION_MAP[sourceBiome] || [];
+  if (fns.length === 0) return detected;
+  for (let y = 4; y < height + 4; y++) {
+    for (let x = 0; x < width; x++) {
+      const srcIdx = (y * width + x) * 3;
+      const r = layer.buffer[srcIdx], g = layer.buffer[srcIdx + 1], b = layer.buffer[srcIdx + 2];
+      const colorInt = (r << 16) | (g << 8) | b;
+      if (colorInt === 0x000000 || colorInt === 0xffffff) continue;
+      const index = getSpawnFunctionIndex(sourceBiome, colorInt);
+      if (index !== null) {
+        const coords = tileToWorldCoordinates(layer.minX, layer.minY, x, y - 4, 0, 0, isNGP, gameMode);
+        detected.push({ funcName: fns[index].funcName, index, x: coords.x, y: coords.y });
+      }
+    }
+  }
+  return detected;
+}
+function hashScan(list) {
+  let h = 2166136261 >>> 0;
+  for (const s of list) {
+    for (const v of [s.index, s.x | 0, s.y | 0]) {
+      h = (h ^ (v & 0xffffffff)) >>> 0;
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+  }
+  return h >>> 0;
 }
 
 function hashBytes(arr) {
@@ -258,6 +351,7 @@ const { regions, bboxes } = findBiomeRegions(pixels, nb.w, nb.h, COALMINE_COLOR)
 
 const SEEDS = [123456789, 42, 999999937, 7, 2000000000, 1, 786433, 4294967295];
 const out = { regions: bboxes, cases: [] };
+const scanOut = { cases: [] };
 for (const seed of SEEDS) {
   for (let ri = 0; ri < bboxes.length; ri++) {
     const layer = genTileLayer(bboxes[ri], regions[ri], ts, seed, 0, "coalmine", "normal", undefined);
@@ -267,9 +361,23 @@ for (const seed of SEEDS) {
       attempts: layer.attempts, pathLen: layer.path.length,
       bufferHash: hashBytes(layer.buffer),
     });
+    const detected = prescanLayer(layer, false, "normal");
+    // Per-funcName counts, for a readable cross-check beyond the hash.
+    const counts = {};
+    for (const s of detected) counts[s.funcName] = (counts[s.funcName] || 0) + 1;
+    scanOut.cases.push({
+      seed, ng: 0, regionIdx: ri,
+      count: detected.length, scanHash: hashScan(detected), counts,
+      sample: detected.slice(0, 5),
+    });
   }
 }
 
 writeFileSync(join(HERE, "layer_vectors.json"), JSON.stringify(out));
-console.log(`wrote layer_vectors.json: ${out.cases.length} cases`);
-for (const c of out.cases) console.log(`  seed=${c.seed} attempts=${c.attempts} pathLen=${c.pathLen} bufHash=${c.bufferHash}`);
+writeFileSync(join(HERE, "scan_vectors.json"), JSON.stringify(scanOut));
+console.log(`wrote layer_vectors.json + scan_vectors.json: ${out.cases.length} cases`);
+for (let i = 0; i < out.cases.length; i++) {
+  const c = out.cases[i], s = scanOut.cases[i];
+  console.log(`  seed=${c.seed} attempts=${c.attempts} bufHash=${c.bufferHash} spawns=${s.count} scanHash=${s.scanHash}`);
+}
+console.log("  funcName counts (seed " + scanOut.cases[0].seed + "):", JSON.stringify(scanOut.cases[0].counts));
