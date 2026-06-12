@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -228,6 +229,37 @@ func BenchmarkRule_PerkAndShop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		checker.SetSeed(uint32(i))
 		_ = checker.Check(rootRule)
+	}
+}
+
+// Real-world example: PERKS_LOTTERY perk AND WAND_FIREBALL in shop pool 1
+func BenchmarkRule_RealExample_PerkLotteryAndFireballShop(b *testing.B) {
+	const raw = `{
+		"id": "root",
+		"type": "and",
+		"rules": [
+			{
+				"id": "r1",
+				"type": "perk",
+				"val": {"names": ["PERKS_LOTTERY"], "match": "all"}
+			},
+			{
+				"id": "r2",
+				"type": "shop",
+				"val": {"poolId": 1, "items": ["WAND_FIREBALL"], "match": "any"}
+			}
+		]
+	}`
+	var rootRule RuleNode
+	if err := json.Unmarshal([]byte(raw), &rootRule); err != nil {
+		b.Fatal(err)
+	}
+	checker := newChecker()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		checker.SetSeed(uint32(i))
+		_ = checker.Check(&rootRule)
 	}
 }
 
