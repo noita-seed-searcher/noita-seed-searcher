@@ -15,6 +15,7 @@ func main() {
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
 	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns")
+	spellSearch := flag.String("spell", "", "Filter list-spawns to spawns containing this spell (case-insensitive, substring)")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
 	biome := flag.String("biome", "coalmine", "Biome for item/potion mode")
 	flag.Parse()
@@ -79,6 +80,16 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "list-spawns: %v\n", err)
 			os.Exit(1)
+		}
+		if *spellSearch != "" {
+			needle := strings.ToUpper(*spellSearch)
+			var filtered []*Spawn
+			for _, s := range spawns {
+				if spawnContainsSpell(s, needle) {
+					filtered = append(filtered, s)
+				}
+			}
+			spawns = filtered
 		}
 		printSpawnList(*seed, spawns)
 
@@ -159,6 +170,42 @@ func pwSuffix(s *Spawn) string {
 		return fmt.Sprintf(" pw=%d", s.PW)
 	}
 	return fmt.Sprintf(" pw=%d pwv=%d", s.PW, s.PWV)
+}
+
+func itemContainsSpell(it *Item, needle string) bool {
+	if it == nil {
+		return false
+	}
+	if it.Spell != "" && strings.Contains(strings.ToUpper(it.Spell), needle) {
+		return true
+	}
+	if it.Wand != nil {
+		for _, c := range it.Wand.Cards {
+			if strings.Contains(strings.ToUpper(c), needle) {
+				return true
+			}
+		}
+		for _, c := range it.Wand.AlwaysCasts {
+			if strings.Contains(strings.ToUpper(c), needle) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func spawnContainsSpell(s *Spawn, needle string) bool {
+	if itemContainsSpell(s.Item, needle) {
+		return true
+	}
+	if s.Chest != nil {
+		for _, it := range s.Chest.Items {
+			if itemContainsSpell(it, needle) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func printSpawnList(seed uint, spawns []*Spawn) {
