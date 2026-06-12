@@ -72,6 +72,14 @@ func main() {
 		item := createPowderPouch(ws, *ng, *x, *y)
 		printItem(item)
 
+	case "list-coalmine":
+		spawns, err := listNaturalSpawns(ws, *ng)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "list-coalmine: %v\n", err)
+			os.Exit(1)
+		}
+		printSpawnList(*seed, spawns)
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown mode: %s\n", *mode)
 		flag.Usage()
@@ -117,6 +125,27 @@ func printItem(item *Item) {
 		fmt.Printf("%s x%d  @ (%.1f, %.1f)\n", item.ItemType, item.Amount, item.X, item.Y)
 	} else {
 		fmt.Printf("%s  @ (%.1f, %.1f)\n", item.ItemType, item.X, item.Y)
+	}
+}
+
+func printSpawnList(seed uint, spawns []*Spawn) {
+	fmt.Printf("Natural spawns on the first level (Mines) for seed %d: %d item(s)\n", seed, len(spawns))
+	for _, s := range spawns {
+		switch {
+		case s.Chest != nil:
+			fmt.Printf("  [%s] @ (%.0f, %.0f) — %d item(s)\n", s.Kind, s.X, s.Y, len(s.Chest.Items))
+			for _, it := range s.Chest.Items {
+				fmt.Printf("      - ")
+				printItem(it)
+			}
+		case s.Item != nil:
+			fmt.Printf("  [%s] ", s.Kind)
+			printItem(s.Item)
+		case s.Kind == "pixel_scene":
+			fmt.Printf("  [%s:%s] @ (%.0f, %.0f) — %s\n", s.Kind, s.FuncName, s.X, s.Y, s.Note)
+		default:
+			fmt.Printf("  [%s] @ (%.0f, %.0f)\n", s.Kind, s.X, s.Y)
+		}
 	}
 }
 

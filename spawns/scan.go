@@ -75,6 +75,9 @@ var coalmineSpawns = []spawnFn{
 	{0xb97300, "spawn_receptacle_oil", false, true},
 }
 
+// coalmineColor is the coalmine region color in the static NG0 biome map.
+const coalmineColor uint32 = 0xffd57917
+
 // biomeSpawnFunctionMap ports BIOME_SPAWN_FUNCTION_MAP (default first, then
 // biome-specific). Extended as more biomes are ported.
 var biomeSpawnFunctionMap = map[string][]spawnFn{

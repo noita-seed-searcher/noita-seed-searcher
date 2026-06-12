@@ -85,8 +85,6 @@ type tileVectors struct {
 	} `json:"cases"`
 }
 
-const coalmineColor uint32 = 0xffd57917
-
 // TestTileGenParity verifies the Wang tileset build, coalmine region detection,
 // and the pre-hack raw tile buffer (stbhw_generate_image) all match the JS.
 func TestTileGenParity(t *testing.T) {
