@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -14,8 +15,9 @@ func main() {
 	pwMaxV := flag.Int("pw-max-vertical", 0, "Parallel world range (±N vertical)")
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
-	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns")
+	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes")
 	spellSearch := flag.String("spell", "", "Filter list-spawns to spawns containing this spell (case-insensitive, substring)")
+	weightsFile := flag.String("weights", "", "Path to weights JSON file for score-biomes mode")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
 	biome := flag.String("biome", "coalmine", "Biome for item/potion mode")
 	flag.Parse()
@@ -92,6 +94,23 @@ func main() {
 			spawns = filtered
 		}
 		printSpawnList(*seed, spawns)
+
+	case "score-biomes":
+		if *weightsFile == "" {
+			fmt.Fprintln(os.Stderr, "score-biomes: -weights flag required")
+			os.Exit(1)
+		}
+		wc, err := loadWeights(*weightsFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "score-biomes: load weights: %v\n", err)
+			os.Exit(1)
+		}
+		spawns, err := listNaturalSpawns(ws, *ng, *pwMax, *pwMaxV)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "score-biomes: %v\n", err)
+			os.Exit(1)
+		}
+		printBiomeScores(*seed, spawns, wc)
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown mode: %s\n", *mode)
@@ -232,6 +251,39 @@ func printSpawnList(seed uint, spawns []*Spawn) {
 			fmt.Printf("  [%s] %s%s @ (%.0f, %.0f)\n", s.Kind, s.Biome, pwSuffix(s), s.X, s.Y)
 		}
 	}
+}
+
+func printBiomeScores(seed uint, spawns []*Spawn, wc WeightConfig) {
+	type entry struct {
+		biome string
+		score float64
+	}
+	totals := map[string]float64{}
+	for _, s := range spawns {
+		sc := wc.scoreSpawn(s)
+		if sc != 0 {
+			totals[s.Biome] += sc
+		}
+	}
+
+	var rows []entry
+	var total float64
+	for biome, sc := range totals {
+		rows = append(rows, entry{biome, sc})
+		total += sc
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].score != rows[j].score {
+			return rows[i].score > rows[j].score
+		}
+		return rows[i].biome < rows[j].biome
+	})
+
+	fmt.Printf("Biome scores for seed %d:\n", seed)
+	for _, r := range rows {
+		fmt.Printf("  %-30s %g\n", r.biome, r.score)
+	}
+	fmt.Printf("  %-30s %g\n", "(total)", total)
 }
 
 func printChest(result *ChestResult) {
