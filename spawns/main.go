@@ -84,11 +84,14 @@ func main() {
 			os.Exit(1)
 		}
 		if *spellSearch != "" {
-			needle := strings.ToUpper(*spellSearch)
+			needles := strings.Split(strings.ToUpper(*spellSearch), ",")
 			var filtered []*Spawn
 			for _, s := range spawns {
-				if spawnContainsSpell(s, needle) {
-					filtered = append(filtered, s)
+				for _, needle := range needles {
+					if needle = strings.TrimSpace(needle); needle != "" && spawnContainsSpell(s, needle) {
+						filtered = append(filtered, s)
+						break
+					}
 				}
 			}
 			spawns = filtered
