@@ -256,6 +256,97 @@ go test -v
 
 Tests verify RNG output matches the game's implementation and that rule evaluation is correct.
 
+---
+
+# Seed Explorer (`spawns/noita-spawn-gen`)
+
+A companion tool that, given a seed, generates and prints the procedural content for that seed — chests, wands, potions, biome item spawns, and more. Useful for inspecting a specific seed in detail or verifying a seed found by the searcher.
+
+## Building
+
+```bash
+cd spawns
+go build -o noita-spawn-gen
+```
+
+## Usage
+
+```bash
+./noita-spawn-gen [flags]
+```
+
+The default mode is `list-spawns`, which lists all natural item spawns across all biomes for the given seed.
+
+### Providing a seed
+
+```bash
+# Explicit seed
+./noita-spawn-gen -seed 12345678
+
+# Read seed directly from the Noita save00/.stream_info file
+./noita-spawn-gen -current-seed
+```
+
+`-current-seed` decompresses the FastLZ-encoded `.stream_info` binary and extracts the active world seed from the standard Steam/Proton save path on Linux:
+`~/.steam/steam/steamapps/compatdata/881100/pfx/.../Nolla_Games_Noita/save00/world/.stream_info`
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-seed N` | `0` | World seed |
+| `-current-seed` | off | Read seed from Noita save00 |
+| `-ng N` | `0` | New Game Plus count |
+| `-pw-max N` | `0` | Parallel world range (±N horizontal) |
+| `-pw-max-vertical N` | `0` | Parallel world range (±N vertical) |
+| `-mode <mode>` | `list-spawns` | Output mode (see below) |
+| `-x F` | `0` | X coordinate (for single-spawn modes) |
+| `-y F` | `0` | Y coordinate (for single-spawn modes) |
+| `-spell <name>` | — | Filter `list-spawns` to spawns containing this spell (comma-separated, case-insensitive substring) |
+| `-weights <file>` | — | Weights JSON file for `score-biomes` mode |
+| `-wand-type <type>` | `wand_level_01` | Wand type for `wand` mode |
+| `-biome <name>` | `coalmine` | Biome for `item`/`potion` modes |
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `list-spawns` | List all natural item spawns across all biomes (default) |
+| `score-biomes` | Score each biome by a weights file and print a ranked summary |
+| `chest` | Generate a chest at (`-x`, `-y`) |
+| `great-chest` | Generate a great chest at (`-x`, `-y`) |
+| `wand` | Generate a wand of type `-wand-type` at (`-x`, `-y`) |
+| `wand-altar` | Generate the wand altar spawn at (`-x`, `-y`) in `-biome` |
+| `item` | Generate a natural item spawn at (`-x`, `-y`) in `-biome` |
+| `potion` | Generate a potion at (`-x`, `-y`) |
+| `potion-altar` | Generate the potion altar spawn at (`-x`, `-y`) in `-biome` |
+| `pouch` | Generate a powder pouch at (`-x`, `-y`) |
+
+### Examples
+
+```bash
+# List all natural spawns for the current save
+./noita-spawn-gen -current-seed
+
+# Filter to spawns containing a specific spell
+./noita-spawn-gen -seed 12345678 -spell SUMMON_PORTAL
+
+# Filter to multiple spells (comma-separated)
+./noita-spawn-gen -seed 12345678 -spell MANA_REDUCE,CHAINSAW
+
+# Include parallel worlds (±2 horizontal)
+./noita-spawn-gen -current-seed -pw-max 2
+
+# Score biomes by a weights file
+./noita-spawn-gen -current-seed -mode score-biomes -weights weights.csv
+
+# Inspect a specific chest
+./noita-spawn-gen -seed 12345678 -mode chest -x 320 -y 243
+
+# Inspect a wand at a known altar location
+./noita-spawn-gen -seed 12345678 -mode wand-altar -x 850 -y 503 -biome coalmine
+```
+
 ## License
 
 This project is a reverse-engineering effort for the purposes of seed searching in Noita.
