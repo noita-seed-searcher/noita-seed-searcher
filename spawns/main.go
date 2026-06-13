@@ -287,6 +287,42 @@ func printBiomeScores(seed uint, spawns []*Spawn, wc WeightConfig) {
 		fmt.Printf("  %-30s %g\n", r.biome, r.score)
 	}
 	fmt.Printf("  %-30s %g\n", "(total)", total)
+
+	// Per-spawn detail: which keys matched and where.
+	fmt.Println()
+	fmt.Println("Matching items:")
+	type aggKey struct{ key, source string }
+	for _, s := range spawns {
+		matches := wc.SpawnMatches(s)
+		if len(matches) == 0 {
+			continue
+		}
+		// Aggregate repeated (key, source) pairs.
+		counts := map[aggKey]struct {
+			n     int
+			score float64
+		}{}
+		var order []aggKey
+		for _, m := range matches {
+			k := aggKey{m.Key, m.Source}
+			if _, seen := counts[k]; !seen {
+				order = append(order, k)
+			}
+			c := counts[k]
+			c.n++
+			c.score += m.Score
+			counts[k] = c
+		}
+		fmt.Printf("  [%s] %s%s @ (%.0f, %.0f)\n", s.Kind, s.Biome, pwSuffix(s), s.X, s.Y)
+		for _, k := range order {
+			c := counts[k]
+			if c.n > 1 {
+				fmt.Printf("    %s ×%d  %s  (+%g)\n", k.key, c.n, k.source, c.score)
+			} else {
+				fmt.Printf("    %s  %s  (+%g)\n", k.key, k.source, c.score)
+			}
+		}
+	}
 }
 
 func printChest(result *ChestResult) {

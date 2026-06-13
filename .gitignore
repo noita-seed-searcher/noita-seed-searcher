@@ -2,3 +2,4 @@ noita-seed-search
 noita-spawn-gen
 seeds.txt
 benchmarks_*.txt
+*.csv
