@@ -10,12 +10,13 @@ import (
 
 func main() {
 	seed := flag.Uint("seed", 0, "World seed")
+	currentSeed := flag.Bool("current-seed", false, "Read world seed from Noita save00/.stream_info")
 	ng := flag.Int("ng", 0, "New Game Plus count")
 	pwMax := flag.Int("pw-max", 0, "Parallel world range (±N horizontal)")
 	pwMaxV := flag.Int("pw-max-vertical", 0, "Parallel world range (±N vertical)")
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
-	mode := flag.String("mode", "chest", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes")
+	mode := flag.String("mode", "list-spawns", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes")
 	spellSearch := flag.String("spell", "", "Filter list-spawns to spawns containing this spell (case-insensitive, substring)")
 	weightsFile := flag.String("weights", "", "Path to weights JSON file for score-biomes mode")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
@@ -23,6 +24,14 @@ func main() {
 	flag.Parse()
 
 	ws := uint32(*seed)
+	if *currentSeed {
+		var err error
+		ws, err = readNoitaSeed(noitaStreamInfoPath())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read seed: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	switch *mode {
 	case "great-chest":
@@ -96,7 +105,7 @@ func main() {
 			}
 			spawns = filtered
 		}
-		printSpawnList(*seed, spawns)
+		printSpawnList(uint(ws), spawns)
 
 	case "score-biomes":
 		if *weightsFile == "" {
@@ -113,7 +122,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "score-biomes: %v\n", err)
 			os.Exit(1)
 		}
-		printBiomeScores(*seed, spawns, wc)
+		printBiomeScores(uint(ws), spawns, wc)
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown mode: %s\n", *mode)
