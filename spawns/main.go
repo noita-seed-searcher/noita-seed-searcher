@@ -25,7 +25,19 @@ func main() {
 	weightsFile := flag.String("weights", "", "Path to weights JSON file for score-biomes mode")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
 	biome := flag.String("biome", "coalmine", "Biome for item/potion mode")
+	outFile := flag.String("out", "", "Write output to this file instead of stdout")
 	flag.Parse()
+
+	if *outFile != "" {
+		f, err := os.Create(*outFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open -out file: %v\n", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		fmt.Fprintf(os.Stderr, "Writing output to %s\n", *outFile)
+		os.Stdout = f
+	}
 
 	ws := uint32(*seed)
 	if *currentSeed {
