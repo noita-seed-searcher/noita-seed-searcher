@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -29,6 +30,9 @@ func main() {
 	outFile := flag.String("out", "", "Write output to this file instead of stdout")
 	flag.Parse()
 
+	// console keeps a handle to the real stdout so the search progress line can
+	// stay on screen even when -out redirects results to a file.
+	console := os.Stdout
 	if *outFile != "" {
 		f, err := os.Create(*outFile)
 		if err != nil {
@@ -137,7 +141,13 @@ func main() {
 				biomes = append(biomes, b)
 			}
 		}
-		if err := searchGreatChest(*ng, start, end, biomes, *limit, *minHearts); err != nil {
+		// Show the live progress line only on an interactive terminal, so it
+		// never pollutes a piped or redirected stdout.
+		var progress io.Writer
+		if fi, err := console.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+			progress = console
+		}
+		if err := searchGreatChest(*ng, start, end, biomes, *limit, *minHearts, progress); err != nil {
 			fmt.Fprintf(os.Stderr, "search-great-chest: %v\n", err)
 			os.Exit(1)
 		}

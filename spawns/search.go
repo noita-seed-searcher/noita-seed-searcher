@@ -2,12 +2,31 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+// fmtETA renders a remaining-seconds estimate as a compact duration.
+func fmtETA(secs float64) string {
+	if secs <= 0 || math.IsInf(secs, 0) || math.IsNaN(secs) {
+		return "?"
+	}
+	d := time.Duration(secs * float64(time.Second))
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+}
 
 // findBiomeEntry returns the biomeConfig entry for a biome name, or nil.
 func findBiomeEntry(biomeName string) *biomeEntry {
@@ -114,7 +133,11 @@ func seedGreatChests(seed uint32, ng, minHearts int, targets []chestTarget) []*S
 // Seeds are scanned in parallel across GOMAXPROCS workers in ordered batches,
 // so output (and limit behaviour) stays deterministic regardless of worker
 // scheduling.
-func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, minHearts int) error {
+//
+// progress receives a live, in-place status line (seeds/s + ETA). It is meant
+// for the console and is kept separate from the result stream so that, when
+// results are redirected to a file via -out, the progress never lands in it.
+func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, minHearts int, progress io.Writer) error {
 	if len(biomeNames) == 0 {
 		return fmt.Errorf("no biomes specified")
 	}
@@ -148,11 +171,47 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, min
 		start, end, biomeList, heartFilter, workers)
 
 	found := 0
+	total := uint64(end) - uint64(start) + 1
+	var scanned uint64
+	startTime := time.Now()
+	var lastDraw time.Time
+
+	// clearLine wipes the in-place progress line so a result (or the final
+	// summary) prints cleanly. No-op when progress is nil.
+	clearLine := func() {
+		if progress != nil {
+			fmt.Fprint(progress, "\r\033[K")
+		}
+	}
+	// drawProgress refreshes the live status line, throttled to ~5/s.
+	drawProgress := func(curSeed uint32, force bool) {
+		if progress == nil {
+			return
+		}
+		now := time.Now()
+		if !force && now.Sub(lastDraw) < 200*time.Millisecond {
+			return
+		}
+		lastDraw = now
+		elapsed := now.Sub(startTime).Seconds()
+		rate := 0.0
+		if elapsed > 0 {
+			rate = float64(scanned) / elapsed
+		}
+		eta := math.Inf(1)
+		if rate > 0 {
+			eta = float64(total-scanned) / rate
+		}
+		fmt.Fprintf(progress, "\r\033[K  %d/%d seeds (%.0f%%)  %.0f seeds/s  seed=%d  found=%d  ETA %s",
+			scanned, total, 100*float64(scanned)/float64(total), rate, curSeed, found, fmtETA(eta))
+	}
+
 	// printSeed emits a seed's hits in order and reports whether limit is reached.
 	printSeed := func(seed uint32, spawns []*Spawn) bool {
 		if len(spawns) == 0 {
 			return false
 		}
+		clearLine()
 		found++
 		for _, sp := range spawns {
 			h, b := chestHearts(sp.Chest)
@@ -193,9 +252,12 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, min
 		wg.Wait()
 		for i := 0; i < n; i++ {
 			if printSeed(b0+uint32(i), res[i]) {
+				scanned += uint64(i + 1)
 				return true
 			}
 		}
+		scanned += uint64(n)
+		drawProgress(b1, false)
 		return false
 	}
 
@@ -219,6 +281,7 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, min
 		b0 = b1 + 1
 	}
 
+	clearLine()
 	fmt.Printf("Done. %d seed(s) with great_chest in %s.\n", found, biomeList)
 	return nil
 }
