@@ -16,7 +16,10 @@ func main() {
 	pwMaxV := flag.Int("pw-max-vertical", 0, "Parallel world range (±N vertical)")
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
-	mode := flag.String("mode", "list-spawns", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes")
+	mode := flag.String("mode", "list-spawns", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes, search-great-chest")
+	seedStart := flag.Uint("seed-start", 0, "First seed for search modes")
+	seedEnd := flag.Uint("seed-end", 0, "Last seed (inclusive) for search modes")
+	limit := flag.Int("limit", 0, "Stop search after N matching seeds (0 = no limit)")
 	spellSearch := flag.String("spell", "", "Filter list-spawns to spawns containing this spell (case-insensitive, substring)")
 	weightsFile := flag.String("weights", "", "Path to weights JSON file for score-biomes mode")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
@@ -106,6 +109,18 @@ func main() {
 			spawns = filtered
 		}
 		printSpawnList(uint(ws), spawns)
+
+	case "search-great-chest":
+		start := uint32(*seedStart)
+		end := uint32(*seedEnd)
+		if end < start {
+			fmt.Fprintln(os.Stderr, "search-great-chest: -seed-end must be >= -seed-start")
+			os.Exit(1)
+		}
+		if err := searchGreatChest(*ng, start, end, *biome, *limit); err != nil {
+			fmt.Fprintf(os.Stderr, "search-great-chest: %v\n", err)
+			os.Exit(1)
+		}
 
 	case "score-biomes":
 		if *weightsFile == "" {
