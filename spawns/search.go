@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // findBiomeEntry returns the biomeConfig entry for a biome name, or nil.
@@ -15,11 +16,23 @@ func findBiomeEntry(biomeName string) *biomeEntry {
 	return nil
 }
 
+// greatChestSpawnFuncs are the spawn functions that can yield a great_chest:
+// spawn_chest (via SpawnChest's rare-roll) and spawn_heart / spawn_bbqbox (both
+// route through spawnHeart, which has its own great_chest branch). Restricting
+// dispatch to these keeps the search cheap while still covering every source —
+// e.g. excavationsite has no spawn_chest, only spawn_heart.
+var greatChestSpawnFuncs = map[string]bool{
+	"spawn_chest":  true,
+	"spawn_heart":  true,
+	"spawn_bbqbox": true,
+}
+
 // greatChestsInBiome returns every great_chest that spawns for the given seed
 // inside a single biome. It mirrors the per-biome slice of listNaturalSpawns
-// but skips every other biome and every spawn function except spawn_chest, so
-// it is cheap enough to run across a large seed range. The tileset is passed in
-// (built once by the caller) to avoid re-decoding the wang PNG per seed.
+// but skips every other biome and every spawn function that cannot produce a
+// great_chest, so it is cheap enough to run across a large seed range. The
+// tileset is passed in (built once by the caller) to avoid re-decoding the wang
+// PNG per seed.
 func greatChestsInBiome(seed uint32, ng int, entry *biomeEntry, ts *stbhwTileset) ([]*Spawn, error) {
 	bm, err := generateBiomeData(seed, ng, "normal")
 	if err != nil {
@@ -33,7 +46,7 @@ func greatChestsInBiome(seed uint32, ng int, entry *biomeEntry, ts *stbhwTileset
 			continue
 		}
 		for _, d := range prescanSpawnFunctions(layer, ng > 0, "normal") {
-			if d.funcName != "spawn_chest" {
+			if !greatChestSpawnFuncs[d.funcName] {
 				continue
 			}
 			s := spawnSwitchItem(d.funcName, seed, ng, float64(d.x), float64(d.y), entry.biomeName, "normal")
@@ -47,31 +60,48 @@ func greatChestsInBiome(seed uint32, ng int, entry *biomeEntry, ts *stbhwTileset
 }
 
 // searchGreatChest scans the inclusive seed range [start, end] for seeds whose
-// given biome contains at least one great_chest, printing each hit. limit stops
+// given biomes contain at least one great_chest, printing each hit. A seed
+// counts once toward limit even if it has hits in several biomes. limit stops
 // the search after that many matching seeds (0 = no limit).
-func searchGreatChest(ng int, start, end uint32, biomeName string, limit int) error {
-	entry := findBiomeEntry(biomeName)
-	if entry == nil {
-		return fmt.Errorf("unknown biome %q", biomeName)
+func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit int) error {
+	if len(biomeNames) == 0 {
+		return fmt.Errorf("no biomes specified")
 	}
-	if entry.wangFile == "" {
-		return fmt.Errorf("biome %q has no tile generation (cannot contain chests)", biomeName)
+	// Resolve every biome and build its tileset once, up front.
+	type target struct {
+		entry *biomeEntry
+		ts    *stbhwTileset
 	}
-	ts, err := buildBiomeTileset(entry.wangFile)
-	if err != nil {
-		return err
+	var targets []target
+	for _, name := range biomeNames {
+		entry := findBiomeEntry(name)
+		if entry == nil {
+			return fmt.Errorf("unknown biome %q", name)
+		}
+		if entry.wangFile == "" {
+			return fmt.Errorf("biome %q has no tile generation (cannot contain chests)", name)
+		}
+		ts, err := buildBiomeTileset(entry.wangFile)
+		if err != nil {
+			return err
+		}
+		targets = append(targets, target{entry, ts})
 	}
 
-	fmt.Printf("Searching seeds %d..%d for great_chest in %s...\n", start, end, biomeName)
+	fmt.Printf("Searching seeds %d..%d for great_chest in %s...\n",
+		start, end, strings.Join(biomeNames, ", "))
 	found := 0
 	// Loop on s so it terminates correctly even when end == math.MaxUint32.
 	for s := start; ; s++ {
-		spawns, err := greatChestsInBiome(s, ng, entry, ts)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "seed %d: %v\n", s, err)
-		} else if len(spawns) > 0 {
-			found++
+		hit := false
+		for _, t := range targets {
+			spawns, err := greatChestsInBiome(s, ng, t.entry, t.ts)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "seed %d (%s): %v\n", s, t.entry.biomeName, err)
+				continue
+			}
 			for _, sp := range spawns {
+				hit = true
 				fmt.Printf("seed %d: great_chest in %s @ (%.0f, %.0f) — %d item(s)\n",
 					s, sp.Biome, sp.X, sp.Y, len(sp.Chest.Items))
 				for _, it := range sp.Chest.Items {
@@ -79,6 +109,9 @@ func searchGreatChest(ng int, start, end uint32, biomeName string, limit int) er
 					printItem(it)
 				}
 			}
+		}
+		if hit {
+			found++
 			if limit > 0 && found >= limit {
 				break
 			}
@@ -87,6 +120,6 @@ func searchGreatChest(ng int, start, end uint32, biomeName string, limit int) er
 			break
 		}
 	}
-	fmt.Printf("Done. %d seed(s) with great_chest in %s.\n", found, biomeName)
+	fmt.Printf("Done. %d seed(s) with great_chest in %s.\n", found, strings.Join(biomeNames, ", "))
 	return nil
 }

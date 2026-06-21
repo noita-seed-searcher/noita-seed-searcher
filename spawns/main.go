@@ -20,6 +20,7 @@ func main() {
 	seedStart := flag.Uint("seed-start", 0, "First seed for search modes")
 	seedEnd := flag.Uint("seed-end", 0, "Last seed (inclusive) for search modes")
 	limit := flag.Int("limit", 0, "Stop search after N matching seeds (0 = no limit)")
+	searchBiomes := flag.String("biomes", "coalmine,excavationsite", "Comma-separated biomes for search modes")
 	spellSearch := flag.String("spell", "", "Filter list-spawns to spawns containing this spell (case-insensitive, substring)")
 	weightsFile := flag.String("weights", "", "Path to weights JSON file for score-biomes mode")
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
@@ -117,7 +118,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, "search-great-chest: -seed-end must be >= -seed-start")
 			os.Exit(1)
 		}
-		if err := searchGreatChest(*ng, start, end, *biome, *limit); err != nil {
+		var biomes []string
+		for _, b := range strings.Split(*searchBiomes, ",") {
+			if b = strings.TrimSpace(b); b != "" {
+				biomes = append(biomes, b)
+			}
+		}
+		if err := searchGreatChest(*ng, start, end, biomes, *limit); err != nil {
 			fmt.Fprintf(os.Stderr, "search-great-chest: %v\n", err)
 			os.Exit(1)
 		}
