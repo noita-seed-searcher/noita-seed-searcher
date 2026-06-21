@@ -20,6 +20,7 @@ func main() {
 	seedStart := flag.Uint("seed-start", 0, "First seed for search modes")
 	seedEnd := flag.Uint("seed-end", 0, "Last seed (inclusive) for search modes")
 	limit := flag.Int("limit", 0, "Stop search after N matching seeds (0 = no limit)")
+	minHearts := flag.Int("min-hearts", 0, "search-great-chest: only report great chests dropping >= N hearts (heart+heart_bigger)")
 	searchBiomes := flag.String("biomes", "coalmine,excavationsite", "Comma-separated biomes for search modes")
 	spellSearch := flag.String("spell", "", "Filter list-spawns to spawns containing this spell (case-insensitive, substring)")
 	weightsFile := flag.String("weights", "", "Path to weights JSON file for score-biomes mode")
@@ -136,7 +137,7 @@ func main() {
 				biomes = append(biomes, b)
 			}
 		}
-		if err := searchGreatChest(*ng, start, end, biomes, *limit); err != nil {
+		if err := searchGreatChest(*ng, start, end, biomes, *limit, *minHearts); err != nil {
 			fmt.Fprintf(os.Stderr, "search-great-chest: %v\n", err)
 			os.Exit(1)
 		}

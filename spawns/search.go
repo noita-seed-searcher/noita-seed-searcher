@@ -37,12 +37,31 @@ type chestTarget struct {
 	ts    *stbhwTileset
 }
 
+// chestHearts sums the heart drops in a generated chest. Counts are post-dedup,
+// so it.Count is authoritative. heart and heart_bigger are the two HP-raising
+// drops (full_heal only heals and is not counted here).
+func chestHearts(c *ChestResult) (hearts, biggerHearts int) {
+	for _, it := range c.Items {
+		n := it.Count
+		if n == 0 {
+			n = 1
+		}
+		switch it.ItemType {
+		case "heart":
+			hearts += n
+		case "heart_bigger":
+			biggerHearts += n
+		}
+	}
+	return hearts, biggerHearts
+}
+
 // greatChestsInBiomeMap returns every great_chest for a seed inside one biome,
 // reusing a biome map that the caller generated once for the seed. It skips
 // every spawn function that cannot produce a great_chest, so it is cheap enough
 // to run across a large seed range. It only reads shared state (the tileset and
 // package config tables), so it is safe to call from multiple goroutines.
-func greatChestsInBiomeMap(bm *BiomeMap, seed uint32, ng int, t chestTarget) []*Spawn {
+func greatChestsInBiomeMap(bm *BiomeMap, seed uint32, ng, minHearts int, t chestTarget) []*Spawn {
 	var out []*Spawn
 	regions, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, t.entry.color)
 	for i := range bboxes {
@@ -55,10 +74,17 @@ func greatChestsInBiomeMap(bm *BiomeMap, seed uint32, ng int, t chestTarget) []*
 				continue
 			}
 			s := spawnSwitchItem(d.funcName, seed, ng, float64(d.x), float64(d.y), t.entry.biomeName, "normal")
-			if s != nil && s.Kind == "great_chest" {
-				s.Biome = t.entry.biomeName
-				out = append(out, s)
+			if s == nil || s.Kind != "great_chest" {
+				continue
 			}
+			if minHearts > 0 {
+				h, b := chestHearts(s.Chest)
+				if h+b < minHearts {
+					continue
+				}
+			}
+			s.Biome = t.entry.biomeName
+			out = append(out, s)
 		}
 	}
 	return out
@@ -67,7 +93,7 @@ func greatChestsInBiomeMap(bm *BiomeMap, seed uint32, ng int, t chestTarget) []*
 // seedGreatChests collects every great_chest for a single seed across all target
 // biomes. The biome map is generated once and shared across targets (a free win
 // when searching several biomes). Errors are seed-local and logged to stderr.
-func seedGreatChests(seed uint32, ng int, targets []chestTarget) []*Spawn {
+func seedGreatChests(seed uint32, ng, minHearts int, targets []chestTarget) []*Spawn {
 	bm, err := generateBiomeData(seed, ng, "normal")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "seed %d: %v\n", seed, err)
@@ -75,7 +101,7 @@ func seedGreatChests(seed uint32, ng int, targets []chestTarget) []*Spawn {
 	}
 	var out []*Spawn
 	for _, t := range targets {
-		out = append(out, greatChestsInBiomeMap(bm, seed, ng, t)...)
+		out = append(out, greatChestsInBiomeMap(bm, seed, ng, minHearts, t)...)
 	}
 	return out
 }
@@ -88,7 +114,7 @@ func seedGreatChests(seed uint32, ng int, targets []chestTarget) []*Spawn {
 // Seeds are scanned in parallel across GOMAXPROCS workers in ordered batches,
 // so output (and limit behaviour) stays deterministic regardless of worker
 // scheduling.
-func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit int) error {
+func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, minHearts int) error {
 	if len(biomeNames) == 0 {
 		return fmt.Errorf("no biomes specified")
 	}
@@ -114,8 +140,12 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit int)
 		workers = 1
 	}
 	biomeList := strings.Join(biomeNames, ", ")
-	fmt.Printf("Searching seeds %d..%d for great_chest in %s (%d workers)...\n",
-		start, end, biomeList, workers)
+	heartFilter := ""
+	if minHearts > 0 {
+		heartFilter = fmt.Sprintf(", >=%d hearts", minHearts)
+	}
+	fmt.Printf("Searching seeds %d..%d for great_chest in %s%s (%d workers)...\n",
+		start, end, biomeList, heartFilter, workers)
 
 	found := 0
 	// printSeed emits a seed's hits in order and reports whether limit is reached.
@@ -125,10 +155,15 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit int)
 		}
 		found++
 		for _, sp := range spawns {
-			fmt.Printf("seed %d: great_chest in %s @ (%.0f, %.0f) — %d item(s)\n",
-				seed, sp.Biome, sp.X, sp.Y, len(sp.Chest.Items))
+			h, b := chestHearts(sp.Chest)
+			fmt.Printf("seed %d: great_chest in %s @ (%.0f, %.0f) — %d item(s)  [%d heart, %d heart_bigger]\n",
+				seed, sp.Biome, sp.X, sp.Y, len(sp.Chest.Items), h, b)
 			for _, it := range sp.Chest.Items {
-				fmt.Printf("    - ")
+				if it.Count > 1 {
+					fmt.Printf("    - x%d ", it.Count)
+				} else {
+					fmt.Printf("    - ")
+				}
 				printItem(it)
 			}
 		}
@@ -151,7 +186,7 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit int)
 					if i >= n {
 						return
 					}
-					res[i] = seedGreatChests(b0+uint32(i), ng, targets)
+					res[i] = seedGreatChests(b0+uint32(i), ng, minHearts, targets)
 				}
 			}()
 		}
