@@ -51,38 +51,25 @@ var greatChestSpawnFuncs = map[string]bool{
 
 // chestTarget pairs a tile-generating biome with its (shared, read-only)
 // tileset, decoded once up front and reused across every seed and worker.
+//
+// For ng==0 the base biome map is seed-independent, so its regions and bounding
+// boxes are also identical across every seed. They are precomputed once and held
+// here (read-only), letting each seed skip the per-seed biome-map decode + scan
+// entirely. For ng>0 the map is seeded, so these stay nil and are recomputed
+// per seed.
 type chestTarget struct {
-	entry *biomeEntry
-	ts    *stbhwTileset
+	entry   *biomeEntry
+	ts      *stbhwTileset
+	regions [][]point
+	bboxes  [][4]int
 }
 
-// chestHearts sums the heart drops in a generated chest. Counts are post-dedup,
-// so it.Count is authoritative. heart and heart_bigger are the two HP-raising
-// drops (full_heal only heals and is not counted here).
-func chestHearts(c *ChestResult) (hearts, biggerHearts int) {
-	for _, it := range c.Items {
-		n := it.Count
-		if n == 0 {
-			n = 1
-		}
-		switch it.ItemType {
-		case "heart":
-			hearts += n
-		case "heart_bigger":
-			biggerHearts += n
-		}
-	}
-	return hearts, biggerHearts
-}
-
-// greatChestsInBiomeMap returns every great_chest for a seed inside one biome,
-// reusing a biome map that the caller generated once for the seed. It skips
-// every spawn function that cannot produce a great_chest, so it is cheap enough
-// to run across a large seed range. It only reads shared state (the tileset and
-// package config tables), so it is safe to call from multiple goroutines.
-func greatChestsInBiomeMap(bm *BiomeMap, seed uint32, ng, minHearts int, t chestTarget) []*Spawn {
+// greatChestsInRegions tiles each precomputed biome region for one seed and
+// collects every great_chest (subject to the minHearts filter). It only reads
+// shared state (tileset, regions, config tables), so it is safe to run from
+// multiple goroutines.
+func greatChestsInRegions(seed uint32, ng, minHearts int, t chestTarget, regions [][]point, bboxes [][4]int) []*Spawn {
 	var out []*Spawn
-	regions, bboxes := findBiomeRegions(bm.Pixels, bm.W, bm.H, t.entry.color)
 	for i := range bboxes {
 		layer := generateTileLayer(bboxes[i], regions[i], t.ts, seed, ng, t.entry.biomeName, "normal", t.entry.randomColors)
 		if layer == nil {
@@ -109,18 +96,47 @@ func greatChestsInBiomeMap(bm *BiomeMap, seed uint32, ng, minHearts int, t chest
 	return out
 }
 
+// chestHearts sums the heart drops in a generated chest. Counts are post-dedup,
+// so it.Count is authoritative. heart and heart_bigger are the two HP-raising
+// drops (full_heal only heals and is not counted here).
+func chestHearts(c *ChestResult) (hearts, biggerHearts int) {
+	for _, it := range c.Items {
+		n := it.Count
+		if n == 0 {
+			n = 1
+		}
+		switch it.ItemType {
+		case "heart":
+			hearts += n
+		case "heart_bigger":
+			biggerHearts += n
+		}
+	}
+	return hearts, biggerHearts
+}
+
 // seedGreatChests collects every great_chest for a single seed across all target
-// biomes. The biome map is generated once and shared across targets (a free win
-// when searching several biomes). Errors are seed-local and logged to stderr.
-func seedGreatChests(seed uint32, ng, minHearts int, targets []chestTarget) []*Spawn {
-	bm, err := generateBiomeData(seed, ng, "normal")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "seed %d: %v\n", seed, err)
-		return nil
+// biomes. When static is true (ng==0) each target already holds its precomputed,
+// seed-independent regions, so the per-seed biome-map decode + scan is skipped
+// entirely. Otherwise the seeded biome map is generated and scanned per seed.
+// Errors are seed-local and logged to stderr.
+func seedGreatChests(seed uint32, ng, minHearts int, targets []chestTarget, static bool) []*Spawn {
+	var bm *BiomeMap
+	if !static {
+		var err error
+		bm, err = generateBiomeData(seed, ng, "normal")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "seed %d: %v\n", seed, err)
+			return nil
+		}
 	}
 	var out []*Spawn
 	for _, t := range targets {
-		out = append(out, greatChestsInBiomeMap(bm, seed, ng, minHearts, t)...)
+		regions, bboxes := t.regions, t.bboxes
+		if !static {
+			regions, bboxes = findBiomeRegions(bm.Pixels, bm.W, bm.H, t.entry.color)
+		}
+		out = append(out, greatChestsInRegions(seed, ng, minHearts, t, regions, bboxes)...)
 	}
 	return out
 }
@@ -155,7 +171,22 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, min
 		if err != nil {
 			return err
 		}
-		targets = append(targets, chestTarget{entry, ts})
+		targets = append(targets, chestTarget{entry: entry, ts: ts})
+	}
+
+	// For ng==0 the base biome map (and thus each biome's regions) is identical
+	// for every seed, so compute it once here instead of per seed in the hot
+	// loop. This removes a full PNG decode + several large allocations + a full
+	// map scan from every seed's work.
+	static := ng == 0
+	if static {
+		bm, err := generateBiomeData(start, ng, "normal")
+		if err != nil {
+			return err
+		}
+		for i := range targets {
+			targets[i].regions, targets[i].bboxes = findBiomeRegions(bm.Pixels, bm.W, bm.H, targets[i].entry.color)
+		}
 	}
 
 	workers := runtime.NumCPU()
@@ -245,7 +276,7 @@ func searchGreatChest(ng int, start, end uint32, biomeNames []string, limit, min
 					if i >= n {
 						return
 					}
-					res[i] = seedGreatChests(b0+uint32(i), ng, minHearts, targets)
+					res[i] = seedGreatChests(b0+uint32(i), ng, minHearts, targets, static)
 				}
 			}()
 		}

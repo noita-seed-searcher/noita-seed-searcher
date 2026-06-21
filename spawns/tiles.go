@@ -164,6 +164,7 @@ func generateRawTileCore(bbox [4]int, ts *stbhwTileset, worldSeed uint32, ngPlus
 
 	prng := &NollaPrng{}
 	g := newStbhwGen(prng)
+	defer g.release()
 	prng.setRandomFromWorldSeed(float64(worldSeed) + float64(ngPlus))
 	prng.next()
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
 	"sort"
 	"strings"
 )
@@ -28,7 +29,22 @@ func main() {
 	wandType := flag.String("wand-type", "wand_level_01", "Wand type for wand mode")
 	biome := flag.String("biome", "coalmine", "Biome for item/potion mode")
 	outFile := flag.String("out", "", "Write output to this file instead of stdout")
+	cpuprofile := flag.String("cpuprofile", "", "Write CPU profile to this file")
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "create cpuprofile: %v\n", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			fmt.Fprintf(os.Stderr, "start cpuprofile: %v\n", err)
+			os.Exit(1)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	// console keeps a handle to the real stdout so the search progress line can
 	// stay on screen even when -out redirects results to a file.

@@ -225,11 +225,19 @@ func applyPostprocessingHacks(pixels []byte, width, height int, worldSeed uint32
 	}
 }
 
-// blockedColors ports pixel_scene_config.js BLOCKED_COLORS.
-var blockedColors = map[uint32]bool{
-	0x00ac6e: true, 0x70d79e: true, 0x70d79f: true, 0x70d7a0: true,
-	0x70d7a1: true, 0x7868ff: true, 0xc35700: true, 0xff0080: true,
-	0xff00ff: true, 0xff0aff: true, 0x00AC64: true,
+// isBlockedColor ports pixel_scene_config.js BLOCKED_COLORS.
+// It reports whether a pixel colour marks a pixel-scene room to be
+// blocked out. A switch (compiled to a jump/compare chain) beats a map lookup
+// here: blockOutRooms calls this for every non-trivial pixel of every generated
+// tile, so it is one of the hottest lookups in the search loop.
+func isBlockedColor(color uint32) bool {
+	switch color {
+	case 0x00ac6e, 0x70d79e, 0x70d79f, 0x70d7a0,
+		0x70d7a1, 0x7868ff, 0xc35700, 0xff0080,
+		0xff00ff, 0xff0aff, 0x00AC64:
+		return true
+	}
+	return false
 }
 
 // room is a blocked-out pixel-scene room (pixel_scene_generation.js).
@@ -248,7 +256,7 @@ func blockOutRooms(pixels []byte, width, height int) []room {
 			if color == 0x000000 || color == 0xffffff {
 				continue
 			}
-			if !blockedColors[color] {
+			if !isBlockedColor(color) {
 				continue
 			}
 

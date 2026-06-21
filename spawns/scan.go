@@ -639,7 +639,16 @@ func prescanSpawnFunctions(layer *tileLayer, isNGP bool, gameMode string) []dete
 			if colorInt == 0x000000 || colorInt == 0xffffff {
 				continue
 			}
-			index := getSpawnFunctionIndex(biome, colorInt)
+			// Scan the already-fetched fns directly; calling
+			// getSpawnFunctionIndex here would redo the biomeSpawnFunctionMap
+			// string lookup for every pixel of the buffer.
+			index := -1
+			for i := range fns {
+				if fns[i].color == colorInt {
+					index = i
+					break
+				}
+			}
 			if index >= 0 {
 				wx, wy := tileToWorldCoordinates(layer.minX, layer.minY, x, y-4, 0, 0, isNGP, gameMode)
 				detected = append(detected, detectedSpawn{

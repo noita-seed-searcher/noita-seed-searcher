@@ -1,5 +1,7 @@
 package main
 
+import "sync"
+
 // Port of noita-telescope/js/stbhw.js — the STB herringbone Wang-tile generator
 // (corner mode only, which is what Noita's biome tilesets use). The module-level
 // color grids in the JS are held on stbhwGen here to avoid global state.
@@ -29,16 +31,37 @@ type stbhwTileset struct {
 // stbhwGen holds the per-generation corner-color grid and the PRNG.
 type stbhwGen struct {
 	cColor              []int32
+	ccPtr               *[]int32 // pooled backing of cColor (nil if not pooled)
 	prng                *NollaPrng
 	repetitionReduction bool
 }
 
+// cColorPool recycles the 300x300 int32 corner-color grids. Each tile
+// generation needs one, and stbhwGenerateImage fully re-initialises it before
+// use, so a recycled buffer (stale contents and all) is safe to reuse. This
+// removes a ~360KB make+zero from every tile generation in the search hot loop.
+var cColorPool = sync.Pool{
+	New: func() any {
+		s := make([]int32, stbhwMaxW*stbhwMaxH)
+		return &s
+	},
+}
+
 func newStbhwGen(prng *NollaPrng) *stbhwGen {
-	c := make([]int32, stbhwMaxW*stbhwMaxH)
-	for i := range c {
-		c[i] = -1
+	cc := cColorPool.Get().(*[]int32)
+	// No -1 fill here: stbhwGenerateImage re-initialises the whole grid before
+	// any read (see the loop at the top of stbhwGenerateImage).
+	return &stbhwGen{cColor: *cc, ccPtr: cc, prng: prng, repetitionReduction: true}
+}
+
+// release returns the corner-color grid to the pool. Safe to call once; the gen
+// must not be used afterwards.
+func (g *stbhwGen) release() {
+	if g.ccPtr != nil {
+		cColorPool.Put(g.ccPtr)
+		g.ccPtr = nil
+		g.cColor = nil
 	}
-	return &stbhwGen{cColor: c, prng: prng, repetitionReduction: true}
 }
 
 func (g *stbhwGen) getC(x, y int) int32 {
