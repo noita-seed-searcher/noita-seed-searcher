@@ -628,6 +628,7 @@ func prescanSpawnFunctions(layer *tileLayer, isNGP bool, gameMode string) []dete
 	if !ok || len(fns) == 0 {
 		return detected
 	}
+	detected = make([]detectedSpawn, 0, 64)
 
 	for y := 4; y < height+4; y++ {
 		for x := 0; x < width; x++ {

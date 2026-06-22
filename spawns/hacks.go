@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/draw"
 	"math"
+	"sync"
 )
 
 // Port of the post-stbhw buffer transforms from noita-telescope:
@@ -248,7 +249,7 @@ type room struct {
 
 // blockOutRooms ports pixel_scene_generation.js blockOutRooms.
 func blockOutRooms(pixels []byte, width, height int) []room {
-	rooms := []room{}
+	rooms := make([]room, 0, 16)
 	for y := 4; y < height; y++ {
 		for x := 0; x < width; x++ {
 			idx := (y*width + x) * 3
@@ -340,6 +341,46 @@ func findSequences(pixels []byte, width, rowY, stride int) [][2]int {
 	return seqs
 }
 
+// pathScratch holds the BFS working set for findMinPath, recycled across calls
+// via pathScratchPool. findMinPath runs once per reroll attempt per region per
+// seed, so allocating fresh width*height visited/parents arrays each time (plus
+// a growing queue) dominated the search's allocation churn.
+//
+// "visited" is encoded as a generation stamp rather than a bool array: a node is
+// visited this BFS iff seen[i] == gen. Bumping gen each BFS gives a fresh visited
+// set with no O(n) reset (parents needs no init either — it is only ever read for
+// stamped, i.e. visited, nodes). The arrays are only zeroed on the rare gen
+// wraparound.
+type pathScratch struct {
+	seen    []int32
+	parents []int32
+	queue   []point
+	gen     int32
+}
+
+var pathScratchPool = sync.Pool{New: func() any { return new(pathScratch) }}
+
+// begin sizes the scratch for an n-cell grid and returns a fresh generation
+// stamp. The queue is truncated for reuse; its backing array is retained.
+func (s *pathScratch) begin(n int) int32 {
+	if cap(s.seen) < n {
+		s.seen = make([]int32, n)
+		s.parents = make([]int32, n)
+	} else {
+		s.seen = s.seen[:n]
+		s.parents = s.parents[:n]
+	}
+	s.queue = s.queue[:0]
+	s.gen++
+	if s.gen <= 0 { // overflow: stamps are no longer strictly increasing, reset
+		for i := range s.seen {
+			s.seen[i] = 0
+		}
+		s.gen = 1
+	}
+	return s.gen
+}
+
 // findMinPath ports pathfinding.js findMinPath: BFS a walkable path from the top
 // entrance to the bottom row. Returns nil if no path exists (triggers a reroll).
 func findMinPath(bbox [4]int, pixels []byte, width, height int, biomeName string, isNGPlus bool, gameMode string) []point {
@@ -365,24 +406,25 @@ func findMinPath(bbox [4]int, pixels []byte, width, height int, biomeName string
 
 	directions := [4][2]int{{0, 1}, {-1, 0}, {1, 0}, {0, -1}}
 
+	sc := pathScratchPool.Get().(*pathScratch)
+	defer pathScratchPool.Put(sc)
+	n := width * height
+
 	for _, startSeq := range topSequences {
 		startX := (startSeq[0] + startSeq[1]) / 2
 
-		visited := make([]bool, width*height)
-		parents := make([]int32, width*height)
-		for i := range parents {
-			parents[i] = -1
-		}
+		gen := sc.begin(n)
+		seen, parents := sc.seen, sc.parents
 
-		queue := []point{{startX, startY}}
-		visited[startY*width+startX] = true
+		sc.queue = append(sc.queue, point{startX, startY})
+		seen[startY*width+startX] = gen
 		parents[startY*width+startX] = -2
 
 		found := false
 		var finalNode point
 
-		for head := 0; head < len(queue); head++ {
-			curr := queue[head]
+		for head := 0; head < len(sc.queue); head++ {
+			curr := sc.queue[head]
 			if curr.Y == height-1 {
 				found = true
 				finalNode = curr
@@ -392,13 +434,13 @@ func findMinPath(bbox [4]int, pixels []byte, width, height int, biomeName string
 				nx, ny := curr.X+d[0], curr.Y+d[1]
 				if nx >= 0 && nx < width && ny > 3 && ny < height {
 					nIdx := ny*width + nx
-					if !visited[nIdx] {
+					if seen[nIdx] != gen {
 						pIdx := nIdx * stride
 						pixelColor := (uint32(pixels[pIdx]) << 16) | (uint32(pixels[pIdx+1]) << 8) | uint32(pixels[pIdx+2])
 						if pixelColor == 0x000000 || pixelColor == 0xc0ffee || pixelColor == 0x8aff80 {
-							visited[nIdx] = true
+							seen[nIdx] = gen
 							parents[nIdx] = int32(curr.Y*width + curr.X)
-							queue = append(queue, point{nx, ny})
+							sc.queue = append(sc.queue, point{nx, ny})
 						}
 					}
 				}

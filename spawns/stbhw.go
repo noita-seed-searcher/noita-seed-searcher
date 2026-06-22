@@ -251,11 +251,27 @@ func (g *stbhwGen) changeColor(oldColor, numOptions int32) int32 {
 }
 
 func (g *stbhwGen) drawHTile(out []byte, stride, w, h, x, y int, tile *stbhwTile, sz int) {
+	rowPix := sz * 2
+	rowBytes := rowPix * 3
+	// Fast path: no horizontal clipping ⇒ each row is a contiguous run that can
+	// be bulk-copied. This is the common interior case.
+	if x >= 0 && x+rowPix <= w {
+		for j := 0; j < sz; j++ {
+			yy := y + j
+			if yy < 0 || yy >= h {
+				continue
+			}
+			src := j * rowBytes
+			dst := yy*stride + x*3
+			copy(out[dst:dst+rowBytes], tile.pixels[src:src+rowBytes])
+		}
+		return
+	}
 	for j := 0; j < sz; j++ {
 		if y+j >= 0 && y+j < h {
-			for i := 0; i < sz*2; i++ {
+			for i := 0; i < rowPix; i++ {
 				if x+i >= 0 && x+i < w {
-					srcIdx := (j*(sz*2) + i) * 3
+					srcIdx := (j*rowPix + i) * 3
 					dstIdx := (y+j)*stride + (x+i)*3
 					out[dstIdx] = tile.pixels[srcIdx]
 					out[dstIdx+1] = tile.pixels[srcIdx+1]
@@ -267,6 +283,20 @@ func (g *stbhwGen) drawHTile(out []byte, stride, w, h, x, y int, tile *stbhwTile
 }
 
 func (g *stbhwGen) drawVTile(out []byte, stride, w, h, x, y int, tile *stbhwTile, sz int) {
+	rowBytes := sz * 3
+	// Fast path: no horizontal clipping ⇒ bulk-copy each contiguous row.
+	if x >= 0 && x+sz <= w {
+		for j := 0; j < sz*2; j++ {
+			yy := y + j
+			if yy < 0 || yy >= h {
+				continue
+			}
+			src := j * rowBytes
+			dst := yy*stride + x*3
+			copy(out[dst:dst+rowBytes], tile.pixels[src:src+rowBytes])
+		}
+		return
+	}
 	for j := 0; j < sz*2; j++ {
 		if y+j >= 0 && y+j < h {
 			for i := 0; i < sz; i++ {
