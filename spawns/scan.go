@@ -1,5 +1,7 @@
 package main
 
+import "sync"
+
 // Port of the spawn-point scanner from noita-telescope/js/poi_scanner.js
 // (prescanSpawnFunctions) + the color->function tables from
 // spawn_function_config.js + tileToWorldCoordinates from utils.js.
@@ -552,6 +554,51 @@ func getSpawnFunctionIndex(biomeName string, color uint32) int {
 	return -1
 }
 
+// spawnColorIndex accelerates the per-pixel spawn-color lookup that
+// prescanSpawnFunctions does for every non-trivial pixel of every generated
+// tile. A biome's fns table can hold ~50 entries, so the original linear scan
+// was a top search cost. present is a 2^24-bit membership set over 0xRRGGBB
+// colors giving O(1) rejection (the overwhelmingly common case); firstIdx
+// resolves the rare matches to the first table index, preserving
+// getSpawnFunctionIndex's first-match semantics.
+type spawnColorIndex struct {
+	present  []uint64
+	firstIdx map[uint32]int
+}
+
+func (s *spawnColorIndex) lookup(color uint32) int {
+	if s.present[color>>6]&(uint64(1)<<(color&63)) == 0 {
+		return -1
+	}
+	if i, ok := s.firstIdx[color]; ok {
+		return i
+	}
+	return -1
+}
+
+var spawnColorIndexCache sync.Map // biome name -> *spawnColorIndex
+
+// spawnColorIndexFor returns the cached membership index for a biome's fns
+// table, building it once on first use.
+func spawnColorIndexFor(biome string, fns []spawnFn) *spawnColorIndex {
+	if v, ok := spawnColorIndexCache.Load(biome); ok {
+		return v.(*spawnColorIndex)
+	}
+	sc := &spawnColorIndex{
+		present:  make([]uint64, (1<<24)/64),
+		firstIdx: make(map[uint32]int, len(fns)),
+	}
+	for i := range fns {
+		c := fns[i].color & 0xffffff
+		if _, ok := sc.firstIdx[c]; !ok {
+			sc.firstIdx[c] = i
+		}
+		sc.present[c>>6] |= uint64(1) << (c & 63)
+	}
+	actual, _ := spawnColorIndexCache.LoadOrStore(biome, sc)
+	return actual.(*spawnColorIndex)
+}
+
 const (
 	worldChunkCenterX    = 35
 	worldChunkCenterXNGP = 32
@@ -628,6 +675,7 @@ func prescanSpawnFunctions(layer *tileLayer, isNGP bool, gameMode string) []dete
 	if !ok || len(fns) == 0 {
 		return detected
 	}
+	sci := spawnColorIndexFor(biome, fns)
 	detected = make([]detectedSpawn, 0, 64)
 
 	for y := 4; y < height+4; y++ {
@@ -640,16 +688,9 @@ func prescanSpawnFunctions(layer *tileLayer, isNGP bool, gameMode string) []dete
 			if colorInt == 0x000000 || colorInt == 0xffffff {
 				continue
 			}
-			// Scan the already-fetched fns directly; calling
-			// getSpawnFunctionIndex here would redo the biomeSpawnFunctionMap
-			// string lookup for every pixel of the buffer.
-			index := -1
-			for i := range fns {
-				if fns[i].color == colorInt {
-					index = i
-					break
-				}
-			}
+			// O(1) membership reject for the common terrain pixel; the linear
+			// fns scan here was a top search cost (~50 entries/biome).
+			index := sci.lookup(colorInt)
 			if index >= 0 {
 				wx, wy := tileToWorldCoordinates(layer.minX, layer.minY, x, y-4, 0, 0, isNGP, gameMode)
 				detected = append(detected, detectedSpawn{
