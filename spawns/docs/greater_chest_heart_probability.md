@@ -2,7 +2,7 @@
 
 This is the probability that a Noita **greater chest** give you exactly *X* hearts, once you take into account the in-chest reroll (`count += 2` / `count += 3`).
 
-The numbers come from `GenerateGreatChest` in `chest.go`. The theoretical values are the exact PRNG branch probabilities (we suppose `random()` is uniform), and the empirical values are counted directly from `gsc_20-30m.out` (every greater chest in **coalmine + excavationsite**, seeds 20,000,000–30,000,000).
+The numbers come from `GenerateGreatChest` in `chest.go`. The theoretical values are the exact PRNG branch probabilities (we suppose `random()` is uniform), and the empirical values are counted directly from `gsc_200-400m.out` (every greater chest in **coalmine + excavationsite**, seeds 200,000,000–400,000,000, that's **828,950** chests).
 
 Be carefull, this don't include the parallel worlds! Our searcher only look at the first two level (coalmine + excavationsite) of the **main** world, so everything here is for the main world only.
 
@@ -24,28 +24,30 @@ The heart branch itself split into `heart` (89%), `heart_bigger` (10%), `full_he
 - **All heart pickups** (incl. full_heal): `a = 0.21`, mean ≈ 1.1667
 - **HP-raising only** (`heart`+`heart_bigger`, matches the searcher tag): `a = 0.2079`, mean ≈ 1.1550
 
-## Cross-check vs `gsc_20-30m.out`
+## Cross-check vs `gsc_200-400m.out`
 
-On a sample of **40991** greater chests, the empirical mean is **1.1479**, against **1.1550** for the model (HP-raising). That's a good sign, the two match really well.
+So on a big sample of **828,950** greater chests (seeds 200M–400M), the empirical mean is **1.1548**, against **1.1550** for the model (HP-raising). That's basically dead on, it's a really good sign. This 200M-seed run replace the older 40,991-chest cross-check (from `gsc_20-30m.out`, mean 1.1479): with 20× more chests the noise mostly vanish and every bin line up nice with the model.
 
 | X | empirical count | empirical P | model P (HP-raising) |
 |---:|---:|---:|---:|
-| 0 | 19867 | 0.484667 | 0.483005 |
-| 1 | 13717 | 0.334634 | 0.335909 |
-| 2 | 3028 | 0.073870 | 0.074561 |
-| 3 | 1381 | 0.033690 | 0.034325 |
-| 4 | 836 | 0.020395 | 0.019727 |
-| 5 | 509 | 0.012417 | 0.012697 |
-| 6 | 369 | 0.009002 | 0.008755 |
-| 7 | 254 | 0.006196 | 0.006324 |
-| 8 | 218 | 0.005318 | 0.004724 |
-| 9 | 152 | 0.003708 | 0.003619 |
-| 10 | 134 | 0.003269 | 0.002828 |
-| 11 | 88 | 0.002147 | 0.002246 |
-| 12 | 82 | 0.002000 | 0.001806 |
-| 13 | 51 | 0.001244 | 0.001469 |
-| 14 | 42 | 0.001025 | 0.001206 |
-| 15 | 42 | 0.001025 | 0.000998 |
+| 0 | 400841 | 0.483553 | 0.483005 |
+| 1 | 278573 | 0.336055 | 0.335909 |
+| 2 | 61497 | 0.074187 | 0.074561 |
+| 3 | 28154 | 0.033963 | 0.034325 |
+| 4 | 16296 | 0.019659 | 0.019727 |
+| 5 | 10475 | 0.012636 | 0.012697 |
+| 6 | 7247 | 0.008742 | 0.008755 |
+| 7 | 5274 | 0.006362 | 0.006324 |
+| 8 | 3883 | 0.004684 | 0.004724 |
+| 9 | 3012 | 0.003634 | 0.003619 |
+| 10 | 2364 | 0.002852 | 0.002828 |
+| 11 | 1898 | 0.002290 | 0.002246 |
+| 12 | 1545 | 0.001864 | 0.001806 |
+| 13 | 1270 | 0.001532 | 0.001469 |
+| 14 | 1048 | 0.001264 | 0.001206 |
+| 15 | 858 | 0.001035 | 0.000998 |
+
+The cumulative tail match too: P(≥1) is **0.5164** empirical vs **0.5170** model, P(≥5) **0.05258** vs **0.05247**, P(≥10) **0.01653** vs **0.01635**. The deepest chest in this window reach **X = 109** hearts (HP-raising), but be carefull, past there you don't really see anything, it's just the model extrapolating.
 
 ## Scaling to the seed space (1 … 2³¹)
 
@@ -172,7 +174,7 @@ Here `est ≥X HP (naive)` = P(≥X)·2³¹, and `est ≥X HP (real)` = P(≥X)�
 | 99 | 5.356e-08 | 5.785e-07 | 4.922e-08 | 5.274e-07 | 105.7 | 1,132.6 | 4.6 |
 | 100 | 4.854e-08 | 5.250e-07 | 4.457e-08 | 4.782e-07 | 95.7 | 1,026.9 | 4.2 |
 
-> Past X≈3 the tail is more or less geometric, with a ratio ≈0.78. Be carefull with a few things: we suppose the PRNG is uniform; the realistic column suppose the greater chests are independent between seeds (true for the rare tail events); and empirically we only saw X≤61 in the 10M-seed window, so the deep-tail values are extrapolation, you don't really see them!
+> Past X≈3 the tail is more or less geometric, with a ratio ≈0.78. Be carefull with a few things: we suppose the PRNG is uniform; the realistic column suppose the greater chests are independent between seeds (true for the rare tail events); and empirically we only saw X≤109 in the 200M-seed window, so the deeper-tail values are extrapolation, you don't really see them!
 
 ## What else you can find in a great chest
 
