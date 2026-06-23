@@ -18,7 +18,7 @@ func main() {
 	pwMaxV := flag.Int("pw-max-vertical", 0, "Parallel world range (±N vertical)")
 	x := flag.Float64("x", 0, "X coordinate")
 	y := flag.Float64("y", 0, "Y coordinate")
-	mode := flag.String("mode", "list-spawns", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes, search-great-chest")
+	mode := flag.String("mode", "list-spawns", "Mode: chest, great-chest, wand, item, potion, pouch, list-spawns, score-biomes, search-great-chest, search-true-orb")
 	seedStart := flag.Uint("seed-start", 0, "First seed for search modes")
 	seedEnd := flag.Uint("seed-end", 0, "Last seed (inclusive) for search modes")
 	limit := flag.Int("limit", 0, "Stop search after N matching seeds (0 = no limit)")
@@ -31,6 +31,16 @@ func main() {
 	outFile := flag.String("out", "", "Write output to this file instead of stdout")
 	cpuprofile := flag.String("cpuprofile", "", "Write CPU profile to this file")
 	flag.Parse()
+
+	// Track whether -biomes was given explicitly so search-true-orb can default
+	// to coalmine (the only main-world orb-chest biome) without overriding a user
+	// choice.
+	biomesSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "biomes" {
+			biomesSet = true
+		}
+	})
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -165,6 +175,34 @@ func main() {
 		}
 		if err := searchGreatChest(*ng, start, end, biomes, *limit, *minHearts, progress); err != nil {
 			fmt.Fprintf(os.Stderr, "search-great-chest: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "search-true-orb":
+		start := uint32(*seedStart)
+		end := uint32(*seedEnd)
+		if end < start {
+			fmt.Fprintln(os.Stderr, "search-true-orb: -seed-end must be >= -seed-start")
+			os.Exit(1)
+		}
+		var biomes []string
+		if !biomesSet {
+			// An orb-bearing great chest only shows up in the Mines in the main
+			// world, so default the search there. -biomes widens it if wanted.
+			biomes = []string{"coalmine"}
+		} else {
+			for _, b := range strings.Split(*searchBiomes, ",") {
+				if b = strings.TrimSpace(b); b != "" {
+					biomes = append(biomes, b)
+				}
+			}
+		}
+		var progress io.Writer
+		if fi, err := console.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+			progress = console
+		}
+		if err := searchTrueOrb(*ng, start, end, biomes, *limit, *pwMax, *pwMaxV, progress); err != nil {
+			fmt.Fprintf(os.Stderr, "search-true-orb: %v\n", err)
 			os.Exit(1)
 		}
 

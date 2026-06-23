@@ -42,6 +42,23 @@ func spawnSwitchItem(funcName string, ws uint32, ng int, x, y float64, biome, ga
 		}
 		return s
 
+	case "spawn_swing_puzzle_target":
+		// The swing puzzle drops a chest at a fixed offset (spawn_functions.js).
+		res := SpawnChest(ws, ng, x-75, y-70, false, false, false)
+		if res == nil {
+			return nil
+		}
+		return &Spawn{FuncName: funcName, Kind: res.Type, X: x - 75, Y: y - 70, Chest: res}
+
+	case "spawn_oiltank_puzzle":
+		// The oiltank puzzle's material roll doesn't affect the chest (it reseeds
+		// on its own position), so we skip straight to the chest at y-25.
+		res := SpawnChest(ws, ng, x, y-25, false, false, false)
+		if res == nil {
+			return nil
+		}
+		return &Spawn{FuncName: funcName, Kind: res.Type, X: x, Y: y - 25, Chest: res}
+
 	case "spawn_trapwand":
 		options := []string{"premade_1", "premade_2", "premade_3", "premade_4", "premade_5",
 			"premade_6", "premade_7", "premade_8", "premade_9", "wand_level_01"}
